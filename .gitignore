@@ -1,0 +1,11 @@
+ /Dataset/
+
+__pycache__/
+*.py[cod]
+*.so
+
+venv/
+.env
+
+.vscode/
+.DS_Store
