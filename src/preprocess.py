@@ -27,7 +27,40 @@ def main():
             all_genres.add(g)
 
     all_genres = sorted(all_genres)
+    counts={g:0 for g in all_genres}
+    selected_idx=[]
 
+    for idx,row in df.iterrows():
+        gs=parse_genres(row[GENRE_COL])
+        if not INCLUDE_NO_GENRE_LABEL:
+            gs=[g for g in gs if g!="(no genres listed)"]
+        if not gs:
+            continue
+        if any(counts.get(g,0)<TARGET_PER_GENRE for g in gs):
+            selected_idx.append(idx)
+            for g in gs:
+                if g in counts:
+                    counts[g]+=1
+        if all(counts[g]>=TARGET_PER_GENRE for g in counts):
+            break
+
+    out=df.loc[selected_idx].copy().reset_index(drop=True)
+
+    for g in all_genres:
+        out[f"y_{g}"]=0
+
+    for i,row in out.iterrows():
+        gs=parse_genres(row[GENRE_COL])
+        if not INCLUDE_NO_GENRE_LABEL:
+            gs=[g for g in gs if g!="(no genres listed)"]
+        for g in gs:
+            col=f"y_{g}"
+            if col in out.columns:
+                out.at[i,col]=1
+
+    out["labels_list"]=out[GENRE_COL].fillna("").apply(parse_genres)
+    if not INCLUDE_NO_GENRE_LABEL:
+        out["labels_list"]=out["labels_list"].apply(lambda xs:[g for g in xs if g!="(no genres listed)"])
     out.to_csv(OUTPUT_CSV, index=False)
 
     print(f"✅ Saved: {OUTPUT_CSV}")
