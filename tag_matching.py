@@ -60,15 +60,15 @@ def get_average_ratings(path: str | Path = Path("Dataset") / "ratings.csv") -> d
         with Path(path).open(newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                movie_id = row.get("movieId")
+                movieId = row.get("movieId")
                 rating = row.get("rating")
-                if movie_id and rating:
-                    movie_ratings[movie_id].append(float(rating))
+                if movieId and rating:
+                    movie_ratings[movieId].append(float(rating))
         
         # Calculate rating averages
-        for movie_id, ratings in movie_ratings.items():
+        for movieId, ratings in movie_ratings.items():
             if ratings:
-                average_ratings[movie_id] = sum(ratings) / len(ratings)
+                average_ratings[movieId] = sum(ratings) / len(ratings)
                 
     except FileNotFoundError:
         print(f"Error! Movie ratings file is not found at {path}. Default rating is set to 0.0.")
@@ -94,16 +94,19 @@ def print_genres(path: str | Path = Path("Dataset") / "movies.csv") -> None:
 	for genre in sorted(genres):
 		print(genre)
 
-def get_movies_by_emotion(emotion: str, path: str | Path = Path("Dataset") / "movies.csv") -> list[tuple[str, float]]:
+def get_movies_by_emotion(emotion: str, avg_ratings: dict[str, float], movies_path: str | Path = Path("Dataset") / "movies.csv") -> list[tuple[str, float]]:
+   
     genre_weights = emotion_to_genre_weight_mappings[emotion]
     movies = []
 
-    with Path(path).open(newline="", encoding="utf-8") as f:
+    with Path(movies_path).open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
 
         for row in reader:
             title = row.get("title", "").strip()
             genres_value = (row.get("genres") or "").strip()
+
+            movieId = row.get("movieId")
 
             if not title or not genres_value:
                 continue
@@ -114,15 +117,17 @@ def get_movies_by_emotion(emotion: str, path: str | Path = Path("Dataset") / "mo
                 total_weight += genre_weights.get(genre, 0.0)
 
             if total_weight > 0:
-                movies.append((title, total_weight))
+                user_rating = avg_ratings.get(movieId, 0.0)
+                final_score = total_weight * user_rating
+                movies.append((title, final_score))
 
     movies.sort(key=lambda x: x[1], reverse=True)
     return movies
 
 
-def print_movies_by_emotion(emotion: str, path: str | Path = Path("Dataset") / "movies.csv") -> None:
+def print_movies_by_emotion(emotion: str, avg_ratings: dict[str, float],  path: str | Path = Path("Dataset") / "movies.csv") -> None:
 	count = 0
-	movies = get_movies_by_emotion(emotion, path)
+	movies = get_movies_by_emotion(emotion, avg_ratings, path)
 	print(f"Movies matching emotion '{emotion}' (ranked):")
 	for title, score in movies:
 		print(f"{title} (Score: {score:.2f})")
@@ -132,7 +137,7 @@ def print_movies_by_emotion(emotion: str, path: str | Path = Path("Dataset") / "
 
 # To accept lowercase emotion names
 emotion_lookup = {k.strip().lower(): k for k in emotion_to_genre_weight_mappings.keys()}
-
+avg_ratings = get_average_ratings()
 while True:
 	choice = input(f"Enter an emotion (joy, sadness, fear, anger, despondent, excitement, curiosity, anxious): ").strip().lower()
 	if choice in emotion_lookup:
@@ -140,4 +145,4 @@ while True:
 		break
 	print(f"Invalid emotion '{choice}'.")
 
-print_movies_by_emotion(emotion_input)
+print_movies_by_emotion(emotion_input, avg_ratings)
