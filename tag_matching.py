@@ -1,3 +1,4 @@
+from collections import defaultdict
 import csv
 from pathlib import Path
 
@@ -49,6 +50,30 @@ emotion_to_genre_weight_mappings = {
         "Crime": -0.7, "Action": -0.4
     }
 }
+
+def get_average_ratings(path: str | Path = Path("Dataset") / "ratings.csv") -> dict[str, float]:
+    movie_ratings = defaultdict(list)
+    average_ratings = {}
+
+    # Matching movie IDs to their ratings
+    try:
+        with Path(path).open(newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                movie_id = row.get("movieId")
+                rating = row.get("rating")
+                if movie_id and rating:
+                    movie_ratings[movie_id].append(float(rating))
+        
+        # Calculate rating averages
+        for movie_id, ratings in movie_ratings.items():
+            if ratings:
+                average_ratings[movie_id] = sum(ratings) / len(ratings)
+                
+    except FileNotFoundError:
+        print(f"Error! Movie ratings file is not found at {path}. Default rating is set to 0.0.")
+    
+    return average_ratings
 
 def print_genres(path: str | Path = Path("Dataset") / "movies.csv") -> None:
 	genres: set[str] = set()
