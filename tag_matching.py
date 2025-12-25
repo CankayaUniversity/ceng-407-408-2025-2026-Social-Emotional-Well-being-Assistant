@@ -1,6 +1,7 @@
 from collections import defaultdict
 import csv
 from pathlib import Path
+import sys
 
 emotion_to_genre_weight_mappings = {
     "Joy": {
@@ -51,6 +52,16 @@ emotion_to_genre_weight_mappings = {
     }
 }
 
+DATASET = Path(__file__).resolve().parent / "Dataset" / "movies.csv"
+
+def find_dataset(path: str | Path) -> Path:
+    p = Path(path)
+    if not p.exists():
+        print(f"ERROR: Dataset file not found: {path}", file=sys.stderr)
+        print("Expected: Dataset/movies.csv", file=sys.stderr)
+        sys.exit(1)
+    return p
+
 def get_average_ratings(path: str | Path = Path("Dataset") / "ratings.csv") -> dict[str, float]:
     movie_ratings = defaultdict(list)
     average_ratings = {}
@@ -75,31 +86,36 @@ def get_average_ratings(path: str | Path = Path("Dataset") / "ratings.csv") -> d
     
     return average_ratings
 
-def print_genres(path: str | Path = Path("Dataset") / "movies.csv") -> None:
-	genres: set[str] = set()
+def print_genres(path: str | Path = DATASET) -> None:
+    genres: set[str] = set()
 
-	with Path(path).open(newline="", encoding="utf-8") as f:
-		reader = csv.DictReader(f)
+    path = find_dataset(path)
 
-		for row in reader:
-			genres_value = (row.get("genres") or "").strip()
-			if not genres_value:
-				continue
+    with Path(path).open(newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
 
-			for genre in genres_value.split("|"):
-				genre = genre.strip()
-				if genre:
-					genres.add(genre)
+        for row in reader:
+            genres_value = (row.get("genres") or "").strip()
+            if not genres_value:
+                continue
 
-	for genre in sorted(genres):
-		print(genre)
+            for genre in genres_value.split("|"):
+                genre = genre.strip()
+                if genre:
+                    genres.add(genre)
 
-def get_movies_by_emotion(emotion: str, avg_ratings: dict[str, float], movies_path: str | Path = Path("Dataset") / "movies.csv") -> list[tuple[str, float]]:
-   
+    for genre in sorted(genres):
+        print(genre)
+
+def get_movies_by_emotion(emotion: str, path: str | Path = DATASET) -> list[tuple[str, float]]:
     genre_weights = emotion_to_genre_weight_mappings[emotion]
     movies = []
 
-    with Path(movies_path).open(newline="", encoding="utf-8") as f:
+    path = find_dataset(path)
+
+    path = find_dataset(path)
+
+    with Path(path).open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
 
         for row in reader:
@@ -125,7 +141,7 @@ def get_movies_by_emotion(emotion: str, avg_ratings: dict[str, float], movies_pa
     return movies
 
 
-def print_movies_by_emotion(emotion: str, avg_ratings: dict[str, float],  path: str | Path = Path("Dataset") / "movies.csv") -> None:
+def print_movies_by_emotion(emotion: str, path: str | Path = DATASET) -> None:
 	count = 0
 	movies = get_movies_by_emotion(emotion, avg_ratings, path)
 	print(f"Movies matching emotion '{emotion}' (ranked):")
@@ -137,6 +153,9 @@ def print_movies_by_emotion(emotion: str, avg_ratings: dict[str, float],  path: 
 
 # To accept lowercase emotion names
 emotion_lookup = {k.strip().lower(): k for k in emotion_to_genre_weight_mappings.keys()}
+
+find_dataset(DATASET)
+
 avg_ratings = get_average_ratings()
 while True:
 	choice = input(f"Enter an emotion (joy, sadness, fear, anger, despondent, excitement, curiosity, anxious): ").strip().lower()
