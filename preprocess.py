@@ -73,5 +73,5 @@ def main():
     out.to_csv(args.out, index=False)
     print(f"Saved: {args.out} | rows={len(out)}")
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     main()
