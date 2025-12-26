@@ -62,30 +62,6 @@ def find_dataset(path: Path) -> Path:
         sys.exit(1)
     return p
 
-# Deprecated function
-def get_average_ratings(path: str | Path = Path("Dataset") / "ratings.csv") -> dict[str, float]:
-    movie_ratings = defaultdict(list)
-    average_ratings = {}
-
-    # Matching movie IDs to their ratings
-    try:
-        with Path(path).open(newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                movieId = row.get("movieId")
-                rating = row.get("rating")
-                if movieId and rating:
-                    movie_ratings[movieId].append(float(rating))
-        
-        # Calculate rating averages
-        for movieId, ratings in movie_ratings.items():
-            if ratings:
-                average_ratings[movieId] = sum(ratings) / len(ratings)
-                
-    except FileNotFoundError:
-        print(f"Error! Movie ratings file is not found at {path}. Default rating is set to 0.0.")
-    
-    return average_ratings
 
 def print_genres(path: str) -> None:
     genres: set[str] = set()
@@ -105,6 +81,7 @@ def print_genres(path: str) -> None:
 
     for genre in sorted(genres):
         print(genre)
+
 
 def get_movies_by_emotion(emotion: str, path: str) -> list[tuple[str, float]]:
     genre_weights = emotion_to_genre_weight_mappings[emotion]
@@ -151,7 +128,6 @@ emotion_lookup = {k.strip().lower(): k for k in emotion_to_genre_weight_mappings
 
 path = find_dataset(DATASET)
 
-# avg_ratings = get_average_ratings()
 while True:
 	choice = input(f"Enter an emotion (joy, sadness, fear, anger, despondent, excitement, curiosity, anxious): ").strip().lower()
 	if choice in emotion_lookup:
