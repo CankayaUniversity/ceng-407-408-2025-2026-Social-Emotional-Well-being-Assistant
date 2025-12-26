@@ -51,9 +51,9 @@ def aggregate_ratings(ratings_csv: str, chunksize: int = 1_000_000):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--movies", default=r"data_raw/movies.csv", help="Path to movies.csv")
-    ap.add_argument("--ratings", default=r"data_raw/ratings.csv", help="Path to ratings.csv")
-    ap.add_argument("--out", default=r"data_processed/movies_enriched.csv", help="Output CSV path")
+    ap.add_argument("--movies", default=r"Dataset/movies.csv", help="Path to movies.csv")
+    ap.add_argument("--ratings", default=r"Dataset/ratings.csv", help="Path to ratings.csv")
+    ap.add_argument("--out", default=r"Dataset/movies_enriched.csv", help="Output CSV path")
     ap.add_argument("--chunksize", type=int, default=1_000_000, help="ratings.csv read chunksize")
     args = ap.parse_args()
 
