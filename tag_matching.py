@@ -83,42 +83,66 @@ def print_genres(path: str) -> None:
         print(genre)
 
 
-def get_movies_by_emotion(emotion: str, path: str) -> list[tuple[str, float]]:
+def get_final_score(total_weight: float, rating_count: int, rating_mean: float) -> float:
+  
+    if rating_count < 2000:
+        weight_factor = rating_count / 2000  # Scale down score for movies with less than 2000 ratings
+    else:
+        weight_factor = 1.0
+
+    final_score = total_weight * (1 + rating_mean / 5.0) * weight_factor
+    return final_score
+
+
+def load_and_parse_movies(path: str) -> list[dict]:
+    movies_data = []
+    with Path(path).open(newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            try:
+                row["rating_count"] = int(row.get("rating_count", "0").strip() or 0.0)
+                row["rating_mean"] = float(row.get("rating_mean", "0.0").strip() or 0.0)
+                movies_data.append(row)
+            except (ValueError, TypeError):
+                continue
+    return movies_data
+
+
+def get_movies_by_emotion(emotion: str, movies_data: list[dict]) -> list[tuple[str, str, float]]:
     genre_weights = emotion_to_genre_weight_mappings[emotion]
     movies = []
 
-    with Path(path).open(newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
+    for row in movies_data:
+        movieId = row.get("movieId", "").strip()
+        title = row.get("title", "Unknown Title").strip()
+        genres_value = (row.get("genres") or "").strip()
+        rating_count = row.get("rating_count", 0)
+        rating_mean = row.get("rating_mean", 0.0)
 
-        for row in reader:
-            movieId = row.get("movieId", "").strip()
-            genres_value = (row.get("genres") or "").strip()
+        if not movieId or not genres_value:
+            continue
 
-            if not movieId or not genres_value:
-                continue
+        total_weight = 0.0
+        for genre in genres_value.split("|"):
+            genre = genre.strip()
+            total_weight += genre_weights.get(genre, 0.0)
 
-            total_weight = 0.0
-            for genre in genres_value.split("|"):
-                genre = genre.strip()
-                total_weight += genre_weights.get(genre, 0.0)
+        if total_weight > 0:
+            final_score = get_final_score(total_weight, rating_count, rating_mean)
+            movies.append((movieId, title, final_score))
 
-            if total_weight > 0:
-                #user_rating = avg_ratings.get(movieId, 0.0)   integrate this part in new function later !
-                #final_score = total_weight * user_rating
-                movies.append((movieId, total_weight))
-
-    movies.sort(key=lambda x: x[1], reverse=True)
+    movies.sort(key=lambda x: x[2], reverse=True)
     return movies
 
 
-def print_movies_by_emotion(emotion: str, path: str) -> None:
+def print_movies_by_emotion(emotion: str, movies_data: list[dict]) -> None:
 	count = 0
-	movies = get_movies_by_emotion(emotion, path)
-	print(f"Movies matching emotion '{emotion}' (ranked):")
-	for movieId, score in movies:
-		print(f"{movieId} (Score: {score:.2f})")
+	movies = get_movies_by_emotion(emotion, movies_data)
+	print(f"Here are the top 3 movies for when you are feeling '{emotion}':")
+	for movieId, title, score in movies:
+		print(f"{title} (Score: {score:.2f})")
 		count += 1
-		if count >= 30:
+		if count >= 3:
 			break
 
 # __main__
@@ -127,12 +151,14 @@ def print_movies_by_emotion(emotion: str, path: str) -> None:
 emotion_lookup = {k.strip().lower(): k for k in emotion_to_genre_weight_mappings.keys()}
 
 path = find_dataset(DATASET)
+movies_data = load_and_parse_movies(path)
 
 while True:
 	choice = input(f"Enter an emotion (joy, sadness, fear, anger, despondent, excitement, curiosity, anxious): ").strip().lower()
 	if choice in emotion_lookup:
 		emotion_input = emotion_lookup[choice] 
+		print_movies_by_emotion(emotion_input, movies_data)
+	elif choice == "exit":
 		break
-	print(f"Invalid emotion '{choice}'.")
-
-print_movies_by_emotion(emotion_input, path)
+	else:
+		print(f"Invalid emotion '{choice}'. Please try again.")
