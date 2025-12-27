@@ -63,10 +63,10 @@ def find_dataset(path: Path) -> Path:
     return p
 
 
-def print_genres(path: str) -> None:
+def print_genres(path: Path) -> None:
     genres: set[str] = set()
 
-    with Path(path).open(newline="", encoding="utf-8") as f:
+    with path.open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
 
         for row in reader:
@@ -94,9 +94,9 @@ def get_final_score(total_weight: float, rating_count: int, rating_mean: float) 
     return final_score
 
 
-def load_and_parse_movies(path: str) -> list[dict]:
+def load_and_parse_movies(path: Path) -> list[dict]:
     movies_data = []
-    with Path(path).open(newline="", encoding="utf-8") as f:
+    with path.open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             try:
