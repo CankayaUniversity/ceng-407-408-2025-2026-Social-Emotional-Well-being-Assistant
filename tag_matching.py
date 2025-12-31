@@ -2,6 +2,7 @@ from collections import defaultdict
 import csv
 from pathlib import Path
 import sys
+import json
 
 emotion_to_genre_weight_mappings = {
     "Joy": {
@@ -53,6 +54,7 @@ emotion_to_genre_weight_mappings = {
 }
 
 DATASET = Path(__file__).resolve().parent / "Dataset" / "movies_enriched.csv"
+USER_FAVORITES = Path(__file__).resolve().parent / "user_favorite_movies.json"
 
 def find_dataset(path: Path) -> Path:
     p = Path(path)
@@ -107,8 +109,30 @@ def load_and_parse_movies(path: Path) -> list[dict]:
                 continue
     return movies_data
 
+import json
 
-def get_movies_by_emotion(emotion: str, movies_data: list[dict]) -> list[tuple[str, str, float]]:
+def get_favorite_genre_weights(movies_data: list[dict], json_path: Path) -> dict[str, float]:
+    
+    with json_path.open(encoding="utf-8") as f:
+        data = json.load(f)
+
+    favorite_titles = set(data.get("user_favorite_movies", []))
+    favorite_genre_weights = defaultdict(float)
+
+    for row in movies_data:
+        title = row.get("title", "").strip()
+        if title in favorite_titles:
+            genres_value = (row.get("genres") or "")
+            for genre in genres_value.split("|"):
+                favorite_genre_weights[genre.strip()] += 0.3  
+    # print(favorite_genre_weights)
+
+
+    return favorite_genre_weights
+
+
+
+def get_movies_by_emotion(emotion: str, movies_data: list[dict], favorite_genre_weights: dict[str, float]) -> list[tuple[str, str, float]]:
     genre_weights = emotion_to_genre_weight_mappings[emotion]
     movies = []
 
@@ -126,6 +150,7 @@ def get_movies_by_emotion(emotion: str, movies_data: list[dict]) -> list[tuple[s
         for genre in genres_value.split("|"):
             genre = genre.strip()
             total_weight += genre_weights.get(genre, 0.0)
+            total_weight += favorite_genre_weights.get(genre, 0.0) 
 
         if total_weight > 0:
             final_score = get_final_score(total_weight, rating_count, rating_mean)
@@ -135,14 +160,14 @@ def get_movies_by_emotion(emotion: str, movies_data: list[dict]) -> list[tuple[s
     return movies
 
 
-def print_movies_by_emotion(emotion: str, movies_data: list[dict]) -> None:
+def print_movies_by_emotion(emotion: str, movies_data: list[dict], favorite_genre_weights: dict[str, float]) -> None:
 	count = 0
-	movies = get_movies_by_emotion(emotion, movies_data)
+	movies = get_movies_by_emotion(emotion, movies_data, favorite_genre_weights)
 	print(f"Here are the top 3 movies for when you are feeling '{emotion}':")
 	for movieId, title, score in movies:
 		print(f"{title} (Score: {score:.2f})")
 		count += 1
-		if count >= 3:
+		if count >= 30:
 			break
 
 # __main__
@@ -153,11 +178,13 @@ emotion_lookup = {k.strip().lower(): k for k in emotion_to_genre_weight_mappings
 path = find_dataset(DATASET)
 movies_data = load_and_parse_movies(path)
 
+favorite_genre_weights = get_favorite_genre_weights(movies_data, USER_FAVORITES)
+
 while True:
 	choice = input(f"Enter an emotion (joy, sadness, fear, anger, despondent, excitement, curiosity, anxious): ").strip().lower()
 	if choice in emotion_lookup:
 		emotion_input = emotion_lookup[choice] 
-		print_movies_by_emotion(emotion_input, movies_data)
+		print_movies_by_emotion(emotion_input, movies_data, favorite_genre_weights)
 	elif choice == "exit":
 		break
 	else:
