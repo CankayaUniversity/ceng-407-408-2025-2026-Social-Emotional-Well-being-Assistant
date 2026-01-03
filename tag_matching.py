@@ -111,6 +111,7 @@ def load_and_parse_movies(path: Path) -> list[dict]:
 
 import json
 
+
 def get_favorite_genre_weights(movies_data: list[dict], json_path: Path) -> dict[str, float]:
     
     with json_path.open(encoding="utf-8") as f:
@@ -129,8 +130,6 @@ def get_favorite_genre_weights(movies_data: list[dict], json_path: Path) -> dict
 
 
     return favorite_genre_weights
-
-
 
 def get_movies_by_emotion(emotion: str, movies_data: list[dict], favorite_genre_weights: dict[str, float]) -> list[tuple[str, str, float]]:
     genre_weights = emotion_to_genre_weight_mappings[emotion]
@@ -167,7 +166,7 @@ def print_movies_by_emotion(emotion: str, movies_data: list[dict], favorite_genr
 	for movieId, title, score in movies:
 		print(f"{title} (Score: {score:.2f})")
 		count += 1
-		if count >= 30:
+		if count >= 3:
 			break
 
 # __main__
@@ -181,11 +180,10 @@ movies_data = load_and_parse_movies(path)
 favorite_genre_weights = get_favorite_genre_weights(movies_data, USER_FAVORITES)
 
 while True:
-	choice = input(f"Enter an emotion (joy, sadness, fear, anger, despondent, excitement, curiosity, anxious): ").strip().lower()
-	if choice in emotion_lookup:
-		emotion_input = emotion_lookup[choice] 
-		print_movies_by_emotion(emotion_input, movies_data, favorite_genre_weights)
-	elif choice == "exit":
-		break
-	else:
-		print(f"Invalid emotion '{choice}'. Please try again.")
+    choice = input(f"Enter an emotion (joy, sadness, fear, anger, despondent, excitement, curiosity, anxious): ").strip().lower()
+    if choice in emotion_lookup:
+        emotion_input = emotion_lookup[choice]
+        break
+    print(f"Invalid emotion '{choice}'. Please try again.")
+
+print_movies_by_emotion(emotion_input, movies_data, favorite_genre_weights)
