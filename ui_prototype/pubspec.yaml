@@ -1,0 +1,40 @@
+name: ui_prototype
+description: 'A new Flutter project.'
+publish_to: none
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.9.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # 🌍 Localization (TR tarih, ay isimleri vs.)
+  flutter_localizations:
+    sdk: flutter
+
+  # UI & Utils
+  cupertino_icons: ^1.0.8
+  image_picker: ^1.1.2
+
+  # Calendar & Date
+  table_calendar: ^3.2.0
+  intl: ^0.20.2
+
+  # ✅ HIVE (sekme değişince + app kapanıp açılınca veri kalıcılığı)
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+  # ✅ SMS / arama / link açmak için (Crisis Help)
+  url_launcher: ^6.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
