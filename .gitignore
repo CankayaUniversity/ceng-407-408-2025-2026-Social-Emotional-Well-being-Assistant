@@ -1,11 +1,14 @@
-/Dataset/
+/Demo/Dataset/*
+!/Demo/Dataset/example.csv
 
 __pycache__/
 *.py[cod]
 *.so
 
 venv/
+.venv/
 .env
 
 .vscode/
 .DS_Store
+node_modules/
