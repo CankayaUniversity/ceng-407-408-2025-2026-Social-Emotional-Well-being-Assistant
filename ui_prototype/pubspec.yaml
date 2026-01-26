@@ -15,6 +15,9 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
+  # ✅ HTTP (Backend API çağrıları için)
+  http: ^1.2.2
+
   # UI & Utils
   cupertino_icons: ^1.0.8
   image_picker: ^1.1.2
