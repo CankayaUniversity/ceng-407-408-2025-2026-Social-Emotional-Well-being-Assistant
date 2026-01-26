@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -11,8 +13,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _usernameCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
+
   bool _obscure1 = true;
   bool _obscure2 = true;
+  bool _loading = false;
+
+  // ✅ Android Emulator için backend URL
+  static const String _baseUrl = "http://10.0.2.2:3000";
 
   @override
   void dispose() {
@@ -22,7 +29,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  void _register() {
+  Future<void> _register() async {
     final username = _usernameCtrl.text.trim();
     final pass = _passwordCtrl.text;
     final confirm = _confirmCtrl.text;
@@ -48,11 +55,63 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    // ✅ PROTOTYPE "register": login ekranına username+password geri dön
-    Navigator.pop<Map<String, String>>(context, {
-      'username': username,
-      'password': pass,
-    });
+    setState(() => _loading = true);
+
+    try {
+      // ✅ Backend endpoint
+      final url = Uri.parse("$_baseUrl/api/auth/register");
+
+      // ⚠️ Backend email istiyor. Şu an sizde sadece username var.
+      // Geçici çözüm: username'i email gibi gönderiyoruz.
+      final email = username.contains("@") ? username : "$username@test.com";
+
+      final res = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "email": email,
+          "password": pass,
+          "name": username, // name alanına username
+        }),
+      );
+
+      // Debug
+      debugPrint("REGISTER STATUS: ${res.statusCode}");
+      debugPrint("REGISTER BODY: ${res.body}");
+
+      if (!mounted) return;
+
+      if (res.statusCode == 201) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Kayıt başarılı ✅")),
+        );
+
+        // İstersen login ekranına geri dön ve username/pass gönder
+        Navigator.pop<Map<String, String>>(context, {
+          'username': username,
+          'password': pass,
+        });
+      } else {
+        // Backend'ten gelen mesajı göstermeye çalış
+        String msg = "Kayıt başarısız";
+        try {
+          final data = jsonDecode(res.body);
+          if (data is Map && data["message"] != null) {
+            msg = data["message"].toString();
+          }
+        } catch (_) {}
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg)),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Hata: $e")),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -77,7 +136,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _usernameCtrl,
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
-                  labelText: "Username",
+                  labelText: "Username (veya Email)",
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -114,10 +173,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 16),
 
               ElevatedButton(
-                onPressed: _register,
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text("Sign up"),
+                onPressed: _loading ? null : _register,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: _loading
+                      ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                      : const Text("Sign up"),
                 ),
               ),
 
