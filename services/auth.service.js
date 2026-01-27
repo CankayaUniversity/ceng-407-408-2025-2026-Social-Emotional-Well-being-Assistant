@@ -10,20 +10,20 @@ async function createUser({ email, passwordHash, name }) {
     data: {
       email,
       passwordHash,
-      name: name || null
+      name: name || null,
     },
     select: {
       id: true,
       email: true,
-      name: true
-    }
+      name: true,
+    },
   });
 }
 
 async function findUserById(id) {
   return prisma.user.findUnique({
     where: { id },
-    select: { id: true, email: true, name: true }
+    select: { id: true, email: true, name: true },
   });
 }
 

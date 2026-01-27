@@ -46,7 +46,6 @@ async function register(req, res) {
     return res.status(201).json({ message: "Kayıt başarılı", user });
   } catch (err) {
     console.error("❌ REGISTER ERROR FULL:", err);
-    // Prisma / DB hatası detail'i bazen err.code içinde olur
     return res.status(500).json({
       message: "Sunucu hatası",
       error: err?.message || String(err),
