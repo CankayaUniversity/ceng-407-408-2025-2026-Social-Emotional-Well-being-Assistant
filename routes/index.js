@@ -1,11 +1,14 @@
 const express = require("express");
 const authRoutes = require("./auth.routes");
+const homeRoutes = require("./home.routes"); // ✅ EKLENDİ
+
 const authMiddleware = require("../middlewares/auth.middleware");
 const authService = require("../services/auth.service");
 
 const router = express.Router();
 
 router.use("/auth", authRoutes);
+router.use("/home", homeRoutes); // ✅ EKLENDİ
 
 // örnek protected endpoint: login olmadan girilmez
 router.get("/me", authMiddleware, async (req, res) => {

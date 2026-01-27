@@ -1,19 +1,71 @@
 // prisma/schema.prisma
 
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
+model User {
+  id                Int               @id @default(autoincrement())
+  email             String            @unique
+  password_hash     String
+  name              String?
+
+  preferences       UserPreferences?
+  emergencyContacts EmergencyContact[]
+  moodEntries       MoodEntry[]
 }
 
-model User {
-  id           Int     @id @default(autoincrement())
-  email        String  @unique
-  passwordHash String  @map("password_hash")
-  name         String?
+model UserPreferences {
+  userId        Int    @id
+  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("users")
+  selectedTabs  Json   @default("[]")
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("user_preferences")
+}
+
+model EmergencyContact {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name       String
+  phone      String?
+  relation   String?
+  isPrimary  Boolean  @default(false)
+
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  // phone null ise bazı DB'lerde (özellikle PostgreSQL) unique davranışı beklenenden farklı olabilir.
+  // Sorun çıkarsa bu unique'i kaldırabilirsiniz.
+  @@unique([userId, phone])
+
+  @@map("emergency_contacts")
+}
+
+model MoodEntry {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  entryDate DateTime // sadece gün gibi kullanacağız
+  mood      Int      // 1-5
+  note      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, entryDate])
+  @@index([userId, entryDate])
+
+  @@map("mood_entries")
 }
