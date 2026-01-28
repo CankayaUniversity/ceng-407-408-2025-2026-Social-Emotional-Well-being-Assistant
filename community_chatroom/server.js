@@ -14,10 +14,20 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3000;
 
 io.on("connection", (socket) => {
-    console.log(`[CONNECT] ${socket.username} (${socket.id})`);
+    console.log(`[CONNECT] (${socket.id})`);
 
     // Join room
-    socket.on("join-room", ({room, username}) => {
+    socket.on("join-room", ({ room, username }) => {
+        const prevRoom = socket.data.room;
+
+        if (prevRoom && prevRoom !== room) {
+            socket.leave(prevRoom);
+            socket.to(prevRoom).emit("system-message", {
+                message: `${socket.data.username ?? username} left ${prevRoom}`,
+            });
+            console.log(`[SWITCH] ${socket.data.username ?? username} left ${prevRoom}`);
+        }
+
         socket.join(room);
         socket.data.username = username;
         socket.data.room = room;
@@ -25,30 +35,36 @@ io.on("connection", (socket) => {
         console.log(`[JOIN] ${username} joined ${room}`);
 
         socket.to(room).emit("system-message", {
-        message: `${username} joined ${room}`
+            message: `${username} joined ${room}`,
         });
     });
 
     // Receive and broadcast messages
-    socket.on("send-message", (message) => {   
-        const {room, username} = socket.data;
-        if(!room){
-            console.error(`[ERROR] User ${username} tried to send message without joining a room.`);
+    socket.on("send-message", (message) => {
+        const { room, username } = socket.data;
+        if (!room) {
+            console.error(`[ERROR] User ${username ?? "<unknown>"} tried to send message without joining a room.`);
+            return;
+        }
+
+        if (!socket.rooms.has(room)) {
+            console.error(`[ERROR] User ${username ?? "<unknown>"} tried to send message to ${room} without being in that room.`);
             return;
         }
 
         io.to(room).emit("new-message", {
-            user: username,
-            text: message,
+            room,
+            username,
+            message,
             timestamp: new Date().toISOString(),
         });
     });
 
     // Leave room
     socket.on("leave-room", () => {
-        const {room, username} = socket.data;
-        if(!room){
-            console.error(`[ERROR] User ${username} tried to leave room without joining one.`);
+        const { room, username } = socket.data;
+        if (!room) {
+            console.error(`[ERROR] User ${username ?? "<unknown>"} tried to leave room without joining one.`);
             return;
         }
 
@@ -57,11 +73,14 @@ io.on("connection", (socket) => {
             message: `${username} left ${room}`
         });
         console.log(`[LEAVE] ${username} left ${room}`);
+
+        socket.data.room = null;
     });
 
     // Disconnect
     socket.on("disconnect", () => {
-        console.log(`[DISCONNECT] ${socket.username}`);
+        const { username } = socket.data;
+        console.log(`[DISCONNECT] ${username ?? "<unknown>"} (${socket.id})`);
     });
 });
 
