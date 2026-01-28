@@ -14,30 +14,49 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3000;
 
 io.on("connection", (socket) => {
-    // Assign anonymous username todo: choose custom
-    socket.username = `anon_${Math.floor(Math.random() * 10000)}`;
-
     console.log(`[CONNECT] ${socket.username} (${socket.id})`);
 
     // Join room
-    socket.on("join-room", (roomId) => {
-        socket.join(roomId);
-        console.log(`[JOIN] ${socket.username} joined ${roomId}`);
+    socket.on("join-room", ({room, username}) => {
+        socket.join(room);
+        socket.data.username = username;
+        socket.data.room = room;
 
-        io.to(roomId).emit("system-message", {
-            text: `${socket.username} joined the room`,
+        console.log(`[JOIN] ${username} joined ${room}`);
+
+        socket.to(room).emit("system-message", {
+        message: `${username} joined ${room}`
         });
     });
 
     // Receive and broadcast messages
-    socket.on("send-message", ({ roomId, message }) => {
-        console.log(`[MESSAGE] ${socket.username} -> ${roomId}: ${message}`);
+    socket.on("send-message", (message) => {   
+        const {room, username} = socket.data;
+        if(!room){
+            console.error(`[ERROR] User ${username} tried to send message without joining a room.`);
+            return;
+        }
 
-        io.to(roomId).emit("new-message", {
-            user: socket.username,
+        io.to(room).emit("new-message", {
+            user: username,
             text: message,
             timestamp: new Date().toISOString(),
         });
+    });
+
+    // Leave room
+    socket.on("leave-room", () => {
+        const {room, username} = socket.data;
+        if(!room){
+            console.error(`[ERROR] User ${username} tried to leave room without joining one.`);
+            return;
+        }
+
+        socket.leave(room);
+        socket.to(room).emit("system-message", {
+            message: `${username} left ${room}`
+        });
+        console.log(`[LEAVE] ${username} left ${room}`);
     });
 
     // Disconnect
