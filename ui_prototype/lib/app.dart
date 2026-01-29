@@ -21,6 +21,7 @@ class MyApp extends StatelessWidget {
 }
 
 class HomeShell extends StatefulWidget {
+  /// Login sonrası gelen username / email
   final String username;
 
   const HomeShell({super.key, required this.username});
@@ -37,10 +38,15 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void initState() {
     super.initState();
+
     _screens = [
       const HomeScreen(),
       const ChatHubScreen(),
-      const MoodScreen(),
+
+      // ✅ KRİTİK DÜZELTME:
+      // Mood artık userKey ister → her kullanıcı kendi mood'unu görür
+      MoodScreen(userKey: widget.username),
+
       ProfileScreen(loginUsername: widget.username),
     ];
   }
@@ -48,7 +54,7 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // ✅ KRİTİK: sekme değişince widget dispose olmasın
+      // ✅ Sekme değişince state kaybolmasın
       body: IndexedStack(
         index: _currentIndex,
         children: _screens,

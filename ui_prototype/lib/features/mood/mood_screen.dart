@@ -14,7 +14,10 @@ import 'ui/mood_quick_selector.dart';
 import 'ui/widgets/mood_card.dart';
 
 class MoodScreen extends StatefulWidget {
-  const MoodScreen({super.key});
+  /// loginUsername/email veya userId string (Home'da kullandığınız userKey neyse onu verin)
+  final String userKey;
+
+  const MoodScreen({super.key, required this.userKey});
 
   @override
   State<MoodScreen> createState() => _MoodScreenState();
@@ -29,7 +32,15 @@ class _MoodScreenState extends State<MoodScreen> {
   @override
   void initState() {
     super.initState();
-    repo.seedDemo();
+
+    // ✅ Default dolu gelmesin diye demo veriyi KALDIRDIK
+    // repo.seedDemo();
+
+    // ✅ User'a özel mood (kalıcı) yükle
+    // Not: userKey'i login'den (email/username/userId) verin.
+    Future.microtask(() async {
+      await repo.bindUser(widget.userKey);
+    });
   }
 
   Future<void> _addOrEditForSelectedDay() async {
@@ -48,7 +59,7 @@ class _MoodScreenState extends State<MoodScreen> {
     repo.upsertEntry(entry);
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Mood kaydedildi (prototype)")),
+      const SnackBar(content: Text("Mood kaydedildi")),
     );
   }
 
@@ -175,6 +186,10 @@ class _MoodScreenState extends State<MoodScreen> {
       body: AnimatedBuilder(
         animation: repo,
         builder: (context, _) {
+          if (!repo.isLoaded) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
           final entry = repo.entryOf(selectedDay);
           final monthCounts = repo.monthCounts(focusedDay);
 
@@ -186,13 +201,16 @@ class _MoodScreenState extends State<MoodScreen> {
           final weekdayAvg = _weekdayAverages(focusedDay);
           final recent = _recentByScanning();
 
+          // ✅ Bu ay hiç kayıt yok mu?
+          final monthHasAny = monthEntries.isNotEmpty;
+
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // Quick Selector (dünkü çalışan)
+              // Quick Selector
               MoodQuickSelector(
-                options: kMoodOptions, // List<MoodOption>
-                selected: entry?.mood, // MoodType?
+                options: kMoodOptions,
+                selected: entry?.mood,
                 palette: repo.palette,
                 onSelect: (t) {
                   final current = repo.entryOf(selectedDay);
@@ -212,7 +230,7 @@ class _MoodScreenState extends State<MoodScreen> {
               ),
               const SizedBox(height: 14),
 
-              // Calendar (✅ mounted guard + focused fix)
+              // Calendar
               MoodCalendarCard(
                 focusedDay: focusedDay,
                 selectedDay: selectedDay,
@@ -231,81 +249,98 @@ class _MoodScreenState extends State<MoodScreen> {
               ),
               const SizedBox(height: 14),
 
-              // Distribution
-              MoodDistributionCard(
-                counts: monthCounts,
-                palette: repo.palette,
-              ),
-              const SizedBox(height: 14),
-
-              // Ekstra: Haftalık Özet
-              MoodCard(
-                title: "Haftalık Özet",
-                child: _WeeklyKpiRow(
-                  entriesMonth: monthEntries,
-                  avg: avg,
-                  std: std,
-                  scoreOf: _scoreOf,
+              // ✅ Kayıt yoksa: sadece boş state göster
+              if (!monthHasAny) ...[
+                MoodCard(
+                  title: "Henüz kayıt yok",
+                  child: const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Bu ay için mood kaydın bulunmuyor."),
+                        SizedBox(height: 8),
+                        Text("İlk kaydını sağ alttaki + ile ekleyebilirsin."),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 14),
-
-              // Ekstra: Trend (✅ len==1 fix CustomPaint)
-              MoodCard(
-                title: "Ruh Hali Trendi",
-                child: _MoodTrendLine(
-                  entries: monthEntries,
-                  scoreOf: _scoreOf,
-                ),
-              ),
-              const SizedBox(height: 14),
-
-
-              // Ekstra: Haftanın Günleri
-              MoodCard(
-                title: "Haftanın Günleri Ortalaması",
-                child: _WeekdayBars(
+                const SizedBox(height: 20),
+              ] else ...[
+                // Distribution
+                MoodDistributionCard(
+                  counts: monthCounts,
                   palette: repo.palette,
-                  values: weekdayAvg,
-                  typeFromScore: _typeFromScore,
                 ),
-              ),
-              const SizedBox(height: 14),
+                const SizedBox(height: 14),
 
-              // Ekstra: Seri
-              MoodCard(
-                title: "Seri",
-                child: _StreakRow(current: currentStreak, best: bestStreak),
-              ),
-              const SizedBox(height: 14),
+                // Haftalık Özet
+                MoodCard(
+                  title: "Haftalık Özet",
+                  child: _WeeklyKpiRow(
+                    entriesMonth: monthEntries,
+                    avg: avg,
+                    std: std,
+                    scoreOf: _scoreOf,
+                  ),
+                ),
+                const SizedBox(height: 14),
 
-              // Journal
-              MoodJournalCard(
-                entry: entry,
-                palette: repo.palette,
-                onEdit: _addOrEditForSelectedDay,
-                onDelete: () => repo.removeEntry(selectedDay),
-              ),
-              const SizedBox(height: 14),
+                // Trend
+                MoodCard(
+                  title: "Ruh Hali Trendi",
+                  child: _MoodTrendLine(
+                    entries: monthEntries,
+                    scoreOf: _scoreOf,
+                  ),
+                ),
+                const SizedBox(height: 14),
 
-              // Ekstra: Son Kayıtlar
-              MoodCard(
-                title: "Son Kayıtlar",
-                child: _RecentList(
-                  entries: recent,
+                // Haftanın Günleri
+                MoodCard(
+                  title: "Haftanın Günleri Ortalaması",
+                  child: _WeekdayBars(
+                    palette: repo.palette,
+                    values: weekdayAvg,
+                    typeFromScore: _typeFromScore,
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // Seri
+                MoodCard(
+                  title: "Seri",
+                  child: _StreakRow(current: currentStreak, best: bestStreak),
+                ),
+                const SizedBox(height: 14),
+
+                // Journal
+                MoodJournalCard(
+                  entry: entry,
                   palette: repo.palette,
-                  onTap: (e) {
-                    if (!mounted) return;
-                    setState(() {
-                      selectedDay = e.day;
-                      focusedDay = dateOnly(DateTime(e.day.year, e.day.month, 1));
-                    });
-                    _addOrEditForSelectedDay();
-                  },
+                  onEdit: _addOrEditForSelectedDay,
+                  onDelete: () => repo.removeEntry(selectedDay),
                 ),
-              ),
+                const SizedBox(height: 14),
 
-              const SizedBox(height: 20),
+                // Son Kayıtlar
+                MoodCard(
+                  title: "Son Kayıtlar",
+                  child: _RecentList(
+                    entries: recent,
+                    palette: repo.palette,
+                    onTap: (e) {
+                      if (!mounted) return;
+                      setState(() {
+                        selectedDay = e.day;
+                        focusedDay = dateOnly(DateTime(e.day.year, e.day.month, 1));
+                      });
+                      _addOrEditForSelectedDay();
+                    },
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
             ],
           );
         },
@@ -449,7 +484,6 @@ class _LinePainter extends CustomPainter {
     const minV = 1.0, maxV = 5.0;
     double normY(double v) => size.height - ((v - minV) / (maxV - minV)) * size.height;
 
-    // ✅ values.length == 1 ise 0’a bölme yok: tek nokta çiz
     if (values.length == 1) {
       canvas.drawCircle(Offset(size.width * 0.5, normY(values.first)), 3.2, dot);
       return;
@@ -482,130 +516,9 @@ class _LinePainter extends CustomPainter {
   bool shouldRepaint(covariant _LinePainter oldDelegate) => oldDelegate.values != values;
 }
 
-class _HeatMapMini extends StatelessWidget {
-  final DateTime month;
-  final MoodEntry? Function(DateTime) entryOf;
-  final MoodPalette palette;
-
-  const _HeatMapMini({
-    required this.month,
-    required this.entryOf,
-    required this.palette,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final start = DateTime(month.year, month.month, 1);
-    final end = DateTime(month.year, month.month + 1, 1);
-
-    final days = end.difference(start).inDays;
-    final firstWeekday = start.weekday; // 1..7
-    final leadingEmpty = firstWeekday - 1;
-
-    final totalCells = leadingEmpty + days;
-    final rows = (totalCells / 7).ceil();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _weekdayLabels(),
-        const SizedBox(height: 10),
-        Column(
-          children: List.generate(rows, (r) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                children: List.generate(7, (c) {
-                  final idx = r * 7 + c;
-                  final dayNum = idx - leadingEmpty + 1;
-                  if (dayNum < 1 || dayNum > days) {
-                    return _cell(null);
-                  }
-
-                  final d = dateOnly(DateTime(month.year, month.month, dayNum));
-                  final e = entryOf(d);
-                  return _cell(e);
-                }),
-              ),
-            );
-          }),
-        ),
-      ],
-    );
-  }
-
-  Widget _weekdayLabels() {
-    // örneğe benzer: tek harf
-    const names = ["P", "S", "Ç", "P", "C", "C", "P"];
-    return Row(
-      children: names
-          .map((t) => Expanded(
-        child: Center(
-          child: Text(
-            t,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: Colors.black.withValues(alpha: 0.45),
-            ),
-          ),
-        ),
-      ))
-          .toList(),
-    );
-  }
-
-  Widget _cell(MoodEntry? e) {
-    // ✅ Daha belirgin hücre: yuvarlak + border + emoji
-    final bool has = e != null;
-
-    final Color fill = has
-        ? palette.colorOf(e!.mood).withValues(alpha: 0.90)
-        : Colors.black.withValues(alpha: 0.06);
-
-    final Color border = has
-        ? palette.colorOf(e!.mood).withValues(alpha: 0.55)
-        : Colors.black.withValues(alpha: 0.10);
-
-    final String emoji = has ? optionOf(e!.mood).emoji : "";
-
-    return Expanded(
-      child: AspectRatio(
-        aspectRatio: 1,
-        child: Center(
-          child: Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: fill,
-              shape: BoxShape.circle,
-              border: Border.all(color: border, width: 1.2),
-              boxShadow: has
-                  ? [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                )
-              ]
-                  : null,
-            ),
-            child: Center(
-              child: Text(
-                emoji,
-                style: const TextStyle(fontSize: 14),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _WeekdayBars extends StatelessWidget {
   final MoodPalette palette;
-  final List<double> values; // 0..6
+  final List<double> values;
   final MoodType Function(int) typeFromScore;
 
   const _WeekdayBars({
@@ -618,7 +531,6 @@ class _WeekdayBars extends StatelessWidget {
   Widget build(BuildContext context) {
     const names = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 
-    // ✅ Daha fazla yükseklik + label alanı sabit -> taşma biter
     return SizedBox(
       height: 160,
       child: Row(
@@ -626,7 +538,6 @@ class _WeekdayBars extends StatelessWidget {
         children: List.generate(7, (i) {
           final v = values[i];
 
-          // Bar yüksekliği (label için altta güvenli alan bıraktık)
           final barMax = 105.0;
           final barMin = 8.0;
           final h = (v == 0) ? barMin : (v / 5.0) * barMax;
@@ -639,31 +550,21 @@ class _WeekdayBars extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                // Bar
                 Container(
+                  width: 18,
                   height: h,
-                  width: 16,
                   decoration: BoxDecoration(
                     color: color,
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-
-                const SizedBox(height: 8),
-
-                // ✅ Label: kesin sığsın diye sabit yükseklik + FittedBox
-                SizedBox(
-                  height: 18,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      names[i],
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.black.withValues(alpha: 0.60),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                const SizedBox(height: 10),
+                Text(
+                  names[i],
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black.withValues(alpha: 0.55),
                   ),
                 ),
               ],
@@ -675,7 +576,6 @@ class _WeekdayBars extends StatelessWidget {
   }
 }
 
-
 class _StreakRow extends StatelessWidget {
   final int current;
   final int best;
@@ -686,25 +586,24 @@ class _StreakRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: _tile("Mevcut Seri", "🔥 $current gün")),
+        Expanded(child: _box("Mevcut", "$current gün")),
         const SizedBox(width: 10),
-        Expanded(child: _tile("En Uzun Seri", "🏆 $best gün")),
+        Expanded(child: _box("En Uzun", "$best gün")),
       ],
     );
   }
 
-  Widget _tile(String label, String value) {
+  Widget _box(String label, String value) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
         color: Colors.black.withValues(alpha: 0.04),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(label, style: TextStyle(color: Colors.black.withValues(alpha: 0.55), fontSize: 12)),
         ],
       ),
@@ -715,7 +614,7 @@ class _StreakRow extends StatelessWidget {
 class _RecentList extends StatelessWidget {
   final List<MoodEntry> entries;
   final MoodPalette palette;
-  final void Function(MoodEntry) onTap;
+  final void Function(MoodEntry e) onTap;
 
   const _RecentList({
     required this.entries,
@@ -723,66 +622,48 @@ class _RecentList extends StatelessWidget {
     required this.onTap,
   });
 
-  String _fmt(DateTime d) {
-    const months = [
-      "Ocak","Şubat","Mart","Nisan","Mayıs","Haziran",
-      "Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"
-    ];
-    return "${d.day.toString().padLeft(2, "0")} ${months[d.month - 1]}, ${d.year}";
-  }
-
   @override
   Widget build(BuildContext context) {
     if (entries.isEmpty) {
       return const Padding(
-        padding: EdgeInsets.all(8.0),
+        padding: EdgeInsets.all(12),
         child: Text("Henüz kayıt yok."),
       );
     }
 
     return Column(
-      children: entries.map((e) {
-        final c = palette.colorOf(e.mood);
-
-        return InkWell(
-          onTap: () => onTap(e),
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: c.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: c.withValues(alpha: 0.35)),
-                  ),
-                  child: Center(
-                    child: Text(optionOf(e.mood).emoji, style: const TextStyle(fontSize: 18)),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(_fmt(e.day), style: const TextStyle(fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 2),
-                      Text(
-                        e.title.isEmpty ? "Kayıt" : e.title,
-                        style: TextStyle(color: Colors.black.withValues(alpha: 0.55), fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right, color: Colors.black.withValues(alpha: 0.35)),
-              ],
+      children: [
+        for (final e in entries)
+          ListTile(
+            leading: CircleAvatar(
+              backgroundColor: palette.colorOf(e.mood),
+              child: Text(optionOf(e.mood).emoji),
             ),
+            title: Text("${e.day.day.toString().padLeft(2, '0')} "
+                "${_monthNameTr(e.day.month)}, ${e.day.year}"),
+            subtitle: Text(optionOf(e.mood).labelTr),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => onTap(e),
           ),
-        );
-      }).toList(),
+      ],
     );
+  }
+
+  static String _monthNameTr(int m) {
+    const names = [
+      "Ocak",
+      "Şubat",
+      "Mart",
+      "Nisan",
+      "Mayıs",
+      "Haziran",
+      "Temmuz",
+      "Ağustos",
+      "Eylül",
+      "Ekim",
+      "Kasım",
+      "Aralık"
+    ];
+    return names[m - 1];
   }
 }

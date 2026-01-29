@@ -10,7 +10,10 @@ enum MoodType { terrible, bad, okay, good, great }
 @immutable
 class MoodOption {
   final MoodType type;
+
+  /// Turkish label used across the UI
   final String labelTr;
+
   final String emoji;
 
   const MoodOption({
@@ -18,6 +21,12 @@ class MoodOption {
     required this.labelTr,
     required this.emoji,
   });
+
+  // ✅ Backward/forward compatible getters (so UI won't crash if "label/title/text" is used)
+  String get label => labelTr;
+  String get title => labelTr;
+  String get text => labelTr;
+  String get name => labelTr;
 }
 
 /// Stable ordering used everywhere (charts, selectors, etc.)
