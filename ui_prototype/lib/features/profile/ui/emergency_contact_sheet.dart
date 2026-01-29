@@ -27,6 +27,8 @@ class _EmergencyContactSheetState extends State<EmergencyContactSheet> {
   late final TextEditingController phone;
 
   String relation = "Arkadaş";
+  bool isPrimary = true;
+
   final relations = const [
     "Arkadaş",
     "Akraba",
@@ -46,6 +48,9 @@ class _EmergencyContactSheetState extends State<EmergencyContactSheet> {
     lastName = TextEditingController(text: widget.existing?.lastName ?? "");
     phone = TextEditingController(text: widget.existing?.phone ?? "");
     relation = widget.existing?.relation ?? relation;
+
+    // ✅ primary bilgisi (backend modelinde var)
+    isPrimary = widget.existing?.isPrimary ?? true;
   }
 
   @override
@@ -68,13 +73,16 @@ class _EmergencyContactSheetState extends State<EmergencyContactSheet> {
       return;
     }
 
+    // ✅ Edit ise id’yi kaybetmemek için existing.id’yi koruyoruz
     Navigator.pop(
       context,
       EmergencyContact(
+        id: widget.existing?.id,
         firstName: fn,
         lastName: ln,
         relation: relation,
         phone: ph,
+        isPrimary: isPrimary,
       ),
     );
   }
@@ -111,7 +119,10 @@ class _EmergencyContactSheetState extends State<EmergencyContactSheet> {
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                 ),
                 const Spacer(),
-                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
               ],
             ),
             const SizedBox(height: 10),
@@ -142,6 +153,18 @@ class _EmergencyContactSheetState extends State<EmergencyContactSheet> {
               ),
               keyboardType: TextInputType.phone,
             ),
+
+            const SizedBox(height: 10),
+
+            // ✅ Primary seçimi (isterseniz kaldırabilirsiniz)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: isPrimary,
+              onChanged: (v) => setState(() => isPrimary = v),
+              title: const Text("Birincil kişi (Primary)"),
+              subtitle: const Text("Crisis help ekranında ilk bu kişi kullanılır."),
+            ),
+
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,

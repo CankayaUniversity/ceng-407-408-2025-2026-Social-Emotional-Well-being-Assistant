@@ -1,111 +1,149 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
+import '../../../core/api/api_client.dart';
 
 class EmergencyContact {
+  final int? id; // backend id
   final String firstName;
   final String lastName;
-  final String relation; // Arkadaş, Anne, Baba, vb.
-  final String phone;    // 05xx... veya +90...
+  final String relation;
+  final String phone;
+  final bool isPrimary;
 
   const EmergencyContact({
+    this.id,
     required this.firstName,
     required this.lastName,
     required this.relation,
     required this.phone,
+    this.isPrimary = true,
   });
 
   String get fullName => ('$firstName $lastName').trim();
 
-  Map<String, dynamic> toMap() => {
-    'firstName': firstName,
-    'lastName': lastName,
-    'relation': relation,
-    'phone': phone,
-  };
+  /// Backend -> UI
+  static EmergencyContact fromApi(dynamic raw) {
+    final m = (raw is Map) ? raw : <String, dynamic>{};
+    final name = (m['name'] ?? '').toString().trim();
+    final parts = name.split(RegExp(r'\s+'));
+    final fn = parts.isNotEmpty ? parts.first : '';
+    final ln = parts.length > 1 ? parts.sublist(1).join(' ') : '';
 
-  static EmergencyContact? fromMap(dynamic raw) {
-    if (raw is! Map) return null;
-    final fn = (raw['firstName'] ?? '').toString();
-    final ln = (raw['lastName'] ?? '').toString();
-    final rel = (raw['relation'] ?? '').toString();
-    final ph = (raw['phone'] ?? '').toString();
-    if (fn.isEmpty && ln.isEmpty && rel.isEmpty && ph.isEmpty) return null;
-    return EmergencyContact(firstName: fn, lastName: ln, relation: rel, phone: ph);
+    return EmergencyContact(
+      id: (m['id'] is int) ? m['id'] as int : int.tryParse('${m['id']}'),
+      firstName: fn,
+      lastName: ln,
+      relation: (m['relation'] ?? '').toString(),
+      phone: (m['phone'] ?? '').toString(),
+      isPrimary: m['isPrimary'] == true,
+    );
   }
+
+  /// UI -> Backend body
+  Map<String, dynamic> toApiBody() => {
+    "name": fullName,
+    "phone": phone,
+    "relation": relation,
+    "isPrimary": isPrimary,
+  };
 }
 
-class EmergencyContactStore {
+class EmergencyContactStore extends ChangeNotifier {
   EmergencyContactStore._();
   static final EmergencyContactStore instance = EmergencyContactStore._();
 
-  static const _boxName = 'profile_store_v1';
+  bool loading = false;
 
-  // ✅ Yeni: çoklu liste
-  static const _keyTrustedContacts = 'trusted_contacts_v1';
+  // ✅ dışarıdan yanlışlıkla değişmesin
+  List<EmergencyContact> _contacts = [];
+  List<EmergencyContact> get contacts => List.unmodifiable(_contacts);
 
-  // ✅ Eski: tek kişi (migrate edeceğiz)
-  static const _legacyKeySingle = 'emergency_contact';
-
-  late Box _box;
-
+  /// init istersen sadece load çağırır
   Future<void> init() async {
-    _box = await Hive.openBox(_boxName);
-    await _migrateLegacyIfNeeded();
+    await load();
   }
 
-  Future<void> _migrateLegacyIfNeeded() async {
-    // Yeni liste yoksa ama eski tek kişi varsa -> listeye taşı
-    final hasNew = _box.containsKey(_keyTrustedContacts);
-    final legacy = _box.get(_legacyKeySingle);
+  Future<void> load() async {
+    loading = true;
+    notifyListeners();
 
-    if (!hasNew && legacy != null) {
-      final single = EmergencyContact.fromMap(legacy);
-      if (single != null) {
-        await _box.put(_keyTrustedContacts, [single.toMap()]);
-      } else {
-        await _box.put(_keyTrustedContacts, <Map<String, dynamic>>[]);
+    try {
+      final res = await ApiClient.get("/home/emergency-contacts");
+      if (res.statusCode != 200) {
+        throw Exception(_prettyErr(res));
       }
-      await _box.delete(_legacyKeySingle); // artık kullanılmıyor
-    } else if (!hasNew) {
-      // hiçbir şey yoksa boş liste başlat
-      await _box.put(_keyTrustedContacts, <Map<String, dynamic>>[]);
+
+      final list = jsonDecode(res.body) as List<dynamic>;
+      _contacts = list.map(EmergencyContact.fromApi).toList();
+    } finally {
+      loading = false;
+      notifyListeners();
     }
   }
 
-  List<EmergencyContact> readAll() {
-    final raw = _box.get(_keyTrustedContacts);
-    if (raw is! List) return [];
-    return raw
-        .map((e) => EmergencyContact.fromMap(e))
-        .whereType<EmergencyContact>()
-        .toList();
-  }
-
-  Future<void> saveAll(List<EmergencyContact> list) async {
-    await _box.put(_keyTrustedContacts, list.map((e) => e.toMap()).toList());
-  }
-
   Future<void> add(EmergencyContact c) async {
-    final list = readAll();
-    list.add(c);
-    await saveAll(list);
+    final res = await ApiClient.post("/home/emergency-contacts", c.toApiBody());
+    if (res.statusCode != 201 && res.statusCode != 200) {
+      throw Exception(_prettyErr(res));
+    }
+    await load();
   }
 
+  /// Update endpoint’iniz varsa çalışır (/home/emergency-contacts/:id)
   Future<void> updateAt(int index, EmergencyContact c) async {
-    final list = readAll();
-    if (index < 0 || index >= list.length) return;
-    list[index] = c;
-    await saveAll(list);
+    if (index < 0 || index >= _contacts.length) return;
+
+    // ✅ id üzerinden güncelle
+    final id = _contacts[index].id ?? c.id;
+    if (id == null) return;
+
+    final res = await ApiClient.put(
+      "/home/emergency-contacts/$id",
+      c.toApiBody(),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception(_prettyErr(res));
+    }
+
+    await load();
   }
 
+  /// Delete endpoint’iniz varsa çalışır (/home/emergency-contacts/:id)
   Future<void> removeAt(int index) async {
-    final list = readAll();
-    if (index < 0 || index >= list.length) return;
-    list.removeAt(index);
-    await saveAll(list);
+    if (index < 0 || index >= _contacts.length) return;
+    final id = _contacts[index].id;
+    if (id == null) return;
+
+    final res = await ApiClient.delete("/home/emergency-contacts/$id");
+    if (res.statusCode != 200) {
+      throw Exception(_prettyErr(res));
+    }
+
+    await load();
   }
 
-  Future<void> clearAll() async {
-    await _box.put(_keyTrustedContacts, <Map<String, dynamic>>[]);
+  /// Logout / user değişimi için
+  void reset() {
+    loading = false;
+    _contacts = [];
+    notifyListeners();
+  }
+
+  // ---------- helpers ----------
+  String _prettyErr(dynamic res) {
+    // res: http.Response
+    try {
+      final body = (res.body ?? '').toString();
+      if (body.isEmpty) return "Request failed (${res.statusCode})";
+      // backend genelde {message:"..."} döner
+      final decoded = jsonDecode(body);
+      if (decoded is Map && decoded["message"] != null) {
+        return decoded["message"].toString();
+      }
+      return body;
+    } catch (_) {
+      return "Request failed (${res.statusCode})";
+    }
   }
 }

@@ -4,7 +4,6 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import 'app.dart';
 import 'features/home/data/home_store.dart';
-import 'features/profile/data/emergency_contact_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,9 +14,8 @@ Future<void> main() async {
   // ✅ Hive init
   await Hive.initFlutter();
 
-  // ✅ Box'ları aç
+  // ✅ HomeStore Hive box'ını aç (token gerekmez)
   await HomeStore.instance.init();
-  await EmergencyContactStore.instance.init();
 
   runApp(const MyApp());
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'data/mood_repository.dart';
 import 'models/mood_models.dart';
-import 'ui/mood_theme_card.dart';
+import 'ui/mood_themecard.dart';
 
 class MoodThemeScreen extends StatelessWidget {
   final MoodRepository repo;
@@ -10,29 +10,20 @@ class MoodThemeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
       appBar: AppBar(title: const Text("Ruh Hali Özelleştirme")),
       body: AnimatedBuilder(
         animation: repo,
-        builder: (context, _) {
+        builder: (context, ) {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text(
+              const Text(
                 "Renk Teması",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: cs.onSurface,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 8),
-              Text(
-                "Ruh hali kategorileriniz için bir renk paleti seçin.",
-                style: TextStyle(color: cs.onSurface.withOpacity(0.70)),
-              ),
+              const Text("Ruh hali kategorileriniz için bir renk paleti seçin."),
               const SizedBox(height: 14),
               ...kThemePalettes.map((p) {
                 final selected = repo.palette.name == p.name;

@@ -22,30 +22,70 @@ class TrustedContactsSheet extends StatefulWidget {
 }
 
 class _TrustedContactsSheetState extends State<TrustedContactsSheet> {
-  List<EmergencyContact> contacts = [];
   bool changed = false;
+  bool _loading = false;
+
+  List<EmergencyContact> get contacts => EmergencyContactStore.instance.contacts;
 
   @override
   void initState() {
     super.initState();
-    contacts = EmergencyContactStore.instance.readAll();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      await EmergencyContactStore.instance.load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Trusted contacts alınamadı: $e")),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _add() async {
     final c = await EmergencyContactSheet.open(context);
     if (c == null) return;
-    await EmergencyContactStore.instance.add(c);
-    setState(() => contacts = EmergencyContactStore.instance.readAll());
-    changed = true;
+
+    try {
+      setState(() => _loading = true);
+      await EmergencyContactStore.instance.add(c);
+      changed = true;
+      await EmergencyContactStore.instance.load();
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Kişi eklenemedi: $e")),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _edit(int index) async {
     final existing = contacts[index];
     final c = await EmergencyContactSheet.open(context, existing: existing);
     if (c == null) return;
-    await EmergencyContactStore.instance.updateAt(index, c);
-    setState(() => contacts = EmergencyContactStore.instance.readAll());
-    changed = true;
+
+    try {
+      setState(() => _loading = true);
+      await EmergencyContactStore.instance.updateAt(index, c);
+      changed = true;
+      await EmergencyContactStore.instance.load();
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Kişi güncellenemedi: $e")),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _delete(int index) async {
@@ -62,9 +102,21 @@ class _TrustedContactsSheetState extends State<TrustedContactsSheet> {
     );
 
     if (ok != true) return;
-    await EmergencyContactStore.instance.removeAt(index);
-    setState(() => contacts = EmergencyContactStore.instance.readAll());
-    changed = true;
+
+    try {
+      setState(() => _loading = true);
+      await EmergencyContactStore.instance.removeAt(index);
+      changed = true;
+      await EmergencyContactStore.instance.load();
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Kişi silinemedi: $e")),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _sms(EmergencyContact c) async {
@@ -123,12 +175,17 @@ class _TrustedContactsSheetState extends State<TrustedContactsSheet> {
             const SizedBox(height: 8),
 
             Expanded(
-              child: contacts.isEmpty
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : contacts.isEmpty
                   ? Center(
                 child: Text(
                   "Henüz kişi yok.\nSağ alttaki + ile ekleyebilirsin.",
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               )
                   : ListView.separated(
@@ -143,10 +200,17 @@ class _TrustedContactsSheetState extends State<TrustedContactsSheet> {
                     ),
                     child: ListTile(
                       leading: const Icon(Icons.contact_phone_rounded),
-                      title: Text("${c.fullName} (${c.relation})",
-                          style: const TextStyle(fontWeight: FontWeight.w900)),
-                      subtitle: Text("Tel: ${c.phone}",
-                          style: TextStyle(fontWeight: FontWeight.w700, color: cs.onSurfaceVariant)),
+                      title: Text(
+                        "${c.fullName} (${c.relation})",
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                      subtitle: Text(
+                        "Tel: ${c.phone}",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
                       trailing: Wrap(
                         spacing: 6,
                         children: [
@@ -177,7 +241,7 @@ class _TrustedContactsSheetState extends State<TrustedContactsSheet> {
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: _add,
+                onPressed: _loading ? null : _add,
                 icon: const Icon(Icons.add),
                 label: const Text("Kişi Ekle"),
               ),

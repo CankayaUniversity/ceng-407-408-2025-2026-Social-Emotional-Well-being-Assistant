@@ -8,10 +8,55 @@ class HomeStore {
   static final HomeStore instance = HomeStore._();
 
   static const String _boxName = 'home_store_v1';
-  late Box _box;
+  Box? _box;
 
+  int? _userId; // ✅ aktif kullanıcı
+
+  /// Uygulama açılışında bir kez çağır (main veya splash)
   Future<void> init() async {
-    _box = await Hive.openBox(_boxName);
+    await _ensureBoxOpen();
+  }
+
+  /// ✅ Login sonrası çağır: HomeStore.instance.setUser(userId)
+  /// Not: Home local (Hive) olduğu için bu yeterli.
+  Future<void> setUser(int userId) async {
+    await _ensureBoxOpen();
+    _userId = userId;
+  }
+
+  /// ✅ Logout sonrası çağır: HomeStore.instance.reset()
+  /// Not: veriyi silmez, sadece aktif user bilgisini sıfırlar.
+  void reset() {
+    _userId = null;
+  }
+
+  /// (Geriye dönük uyum için) clearUser()
+  void clearUser() => reset();
+
+  Future<void> _ensureBoxOpen() async {
+    if (_box != null && _box!.isOpen) return;
+
+    if (Hive.isBoxOpen(_boxName)) {
+      _box = Hive.box(_boxName);
+    } else {
+      _box = await Hive.openBox(_boxName);
+    }
+  }
+
+  void _ensureUser() {
+    if (_userId == null) {
+      throw StateError(
+        "HomeStore: userId set edilmemiş. Login sonrası HomeStore.instance.setUser(userId) çağırın.",
+      );
+    }
+  }
+
+  Box get _safeBox {
+    final b = _box;
+    if (b == null || !b.isOpen) {
+      throw StateError("HomeStore: Box açık değil. Önce init() çağırın.");
+    }
+    return b;
   }
 
   DateTime _strip(DateTime d) => DateTime(d.year, d.month, d.day);
@@ -43,11 +88,16 @@ class HomeStore {
     return TimeOfDay(hour: h, minute: m);
   }
 
-  /// Gün verisini okur:
-  /// HabitType -> (done, time)
+  /// ✅ user’a özel key: u:<id>|<yyyy-mm-dd>
+  String _userDayKey(DateTime day) {
+    _ensureUser();
+    return 'u:${_userId!}|${_dayKey(day)}';
+  }
+
+  /// Gün verisini okur: HabitType -> (done, time)
   Map<HabitType, ({bool done, TimeOfDay? time})> readDay(DateTime day) {
-    final key = _dayKey(day);
-    final raw = _box.get(key);
+    final key = _userDayKey(day);
+    final raw = _safeBox.get(key);
 
     // default (hiç kayıt yoksa)
     if (raw == null || raw is! Map) {
@@ -79,7 +129,8 @@ class HomeStore {
       DateTime day,
       Map<HabitType, ({bool done, TimeOfDay? time})> data,
       ) async {
-    final key = _dayKey(day);
+    await _ensureBoxOpen();
+    final key = _userDayKey(day);
 
     final map = <String, Map<String, dynamic>>{};
     for (final e in data.entries) {
@@ -89,6 +140,17 @@ class HomeStore {
       };
     }
 
-    await _box.put(key, map);
+    await _safeBox.put(key, map);
+  }
+
+  /// (Opsiyonel) Bu kullanıcıya ait tüm kayıtları temizle
+  Future<void> clearAllForUser() async {
+    await _ensureBoxOpen();
+    _ensureUser();
+    final prefix = 'u:${_userId!}|';
+    final keysToDelete = _safeBox.keys
+        .where((k) => k is String && k.startsWith(prefix))
+        .toList();
+    await _safeBox.deleteAll(keysToDelete);
   }
 }

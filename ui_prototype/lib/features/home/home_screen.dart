@@ -34,24 +34,37 @@ class _HomeScreenState extends State<HomeScreen> {
   DateTime? _selectedDay;
   CalendarFormat _calendarFormat = CalendarFormat.month;
 
+  /// Gün -> HabitType -> state
   final Map<DateTime, Map<HabitType, HabitDayState>> _dayMap = {};
+
+  /// ✅ Bu gün Hive’dan gerçekten yüklendi mi?
+  final Set<DateTime> _loadedDays = {};
 
   DateTime _key(DateTime d) => DateTime(d.year, d.month, d.day);
 
   @override
   void initState() {
     super.initState();
+
     // ✅ açılışta bugünü Hive’dan çek
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _loadDay(_focusedDay);
+      final today = _key(DateTime.now());
+      _selectedDay = today;
+      _focusedDay = today;
+
+      await _loadDay(today);
+
       if (!mounted) return;
       setState(() {});
     });
   }
 
+  /// ✅ Gün verisini Hive’dan yükle (default map koyulmuş olsa bile YÜKLEYECEK)
   Future<void> _loadDay(DateTime day) async {
     final k = _key(day);
-    if (_dayMap.containsKey(k)) return;
+
+    // ✅ Daha önce Hive’dan yüklendiyse tekrar okuma (performans)
+    if (_loadedDays.contains(k)) return;
 
     final data = HomeStore.instance.readDay(k);
 
@@ -65,6 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
     };
 
     _dayMap[k] = map;
+    _loadedDays.add(k);
   }
 
   Future<void> _saveDay(DateTime day) async {
@@ -82,13 +96,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Map<HabitType, HabitDayState> _stateOf(DateTime day) {
     final k = _key(day);
+
+    // varsa direkt dön
     if (_dayMap.containsKey(k)) return _dayMap[k]!;
 
-    // (load gelmeden çağrılırsa) default üret
+    // ✅ (Henüz yüklenmediyse) default üret
     final map = {for (final h in kHomeHabits) h.type: HabitDayState(type: h.type)};
     _dayMap[k] = map;
 
-    // arka planda Hive’dan yükle
+    // ✅ ÖNEMLİ: _loadedDays’e ekleme! çünkü bu default, Hive’dan yüklenmedi.
+    // Arka planda Hive’dan gerçek datayı yükle
     _loadDay(k).then((_) {
       if (!mounted) return;
       setState(() {});
@@ -142,7 +159,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _onHabitTap(HabitType type) async {
-    final day = _selectedDay ?? _focusedDay;
+    final day = _key(_selectedDay ?? _focusedDay);
+
+    // ✅ Önce o günü garanti yükle
+    await _loadDay(day);
 
     // ✅ Takviye
     if (type == HabitType.medicine) {
@@ -171,7 +191,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final day = _selectedDay ?? _focusedDay;
+    final day = _key(_selectedDay ?? _focusedDay);
     final done = _doneCount(day);
     final total = kHomeHabits.length;
 
@@ -213,11 +233,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
             // ✅ gün seçince Hive’dan yükle
             onDaySelected: (s, f) async {
+              final selected = _key(s);
               setState(() {
-                _selectedDay = s;
-                _focusedDay = f;
+                _selectedDay = selected;
+                _focusedDay = _key(f);
               });
-              await _loadDay(s);
+
+              await _loadDay(selected);
+
               if (!mounted) return;
               setState(() {});
             },

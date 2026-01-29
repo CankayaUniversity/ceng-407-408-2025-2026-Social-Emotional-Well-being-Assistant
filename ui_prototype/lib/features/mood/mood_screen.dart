@@ -39,7 +39,7 @@ class _MoodScreenState extends State<MoodScreen> {
       context,
       day: selectedDay,
       existing: existing,
-      palette: repo.palette, // ✅ senin sheet zorunlu istiyor
+      palette: repo.palette,
     );
 
     if (!mounted) return;
@@ -155,8 +155,6 @@ class _MoodScreenState extends State<MoodScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text("Mood"),
@@ -164,7 +162,7 @@ class _MoodScreenState extends State<MoodScreen> {
           IconButton(
             tooltip: "Tema",
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => MoodThemeScreen(repo: repo)), // ✅ repo zorunlu
+              MaterialPageRoute(builder: (_) => MoodThemeScreen(repo: repo)),
             ),
             icon: const Icon(Icons.palette_outlined),
           ),
@@ -191,10 +189,10 @@ class _MoodScreenState extends State<MoodScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // Quick Selector (senin API)
+              // Quick Selector (dünkü çalışan)
               MoodQuickSelector(
-                options: kMoodOptions,
-                selected: entry?.mood,
+                options: kMoodOptions, // List<MoodOption>
+                selected: entry?.mood, // MoodType?
                 palette: repo.palette,
                 onSelect: (t) {
                   final current = repo.entryOf(selectedDay);
@@ -214,6 +212,7 @@ class _MoodScreenState extends State<MoodScreen> {
               ),
               const SizedBox(height: 14),
 
+              // Calendar (✅ mounted guard + focused fix)
               MoodCalendarCard(
                 focusedDay: focusedDay,
                 selectedDay: selectedDay,
@@ -232,12 +231,14 @@ class _MoodScreenState extends State<MoodScreen> {
               ),
               const SizedBox(height: 14),
 
+              // Distribution
               MoodDistributionCard(
                 counts: monthCounts,
                 palette: repo.palette,
               ),
               const SizedBox(height: 14),
 
+              // Ekstra: Haftalık Özet
               MoodCard(
                 title: "Haftalık Özet",
                 child: _WeeklyKpiRow(
@@ -249,6 +250,7 @@ class _MoodScreenState extends State<MoodScreen> {
               ),
               const SizedBox(height: 14),
 
+              // Ekstra: Trend (✅ len==1 fix CustomPaint)
               MoodCard(
                 title: "Ruh Hali Trendi",
                 child: _MoodTrendLine(
@@ -258,6 +260,8 @@ class _MoodScreenState extends State<MoodScreen> {
               ),
               const SizedBox(height: 14),
 
+
+              // Ekstra: Haftanın Günleri
               MoodCard(
                 title: "Haftanın Günleri Ortalaması",
                 child: _WeekdayBars(
@@ -268,12 +272,14 @@ class _MoodScreenState extends State<MoodScreen> {
               ),
               const SizedBox(height: 14),
 
+              // Ekstra: Seri
               MoodCard(
                 title: "Seri",
                 child: _StreakRow(current: currentStreak, best: bestStreak),
               ),
               const SizedBox(height: 14),
 
+              // Journal
               MoodJournalCard(
                 entry: entry,
                 palette: repo.palette,
@@ -282,6 +288,7 @@ class _MoodScreenState extends State<MoodScreen> {
               ),
               const SizedBox(height: 14),
 
+              // Ekstra: Son Kayıtlar
               MoodCard(
                 title: "Son Kayıtlar",
                 child: _RecentList(
@@ -299,12 +306,6 @@ class _MoodScreenState extends State<MoodScreen> {
               ),
 
               const SizedBox(height: 20),
-
-              // küçük debug satırı (darkta görünür)
-              Text(
-                "Theme: ${Theme.of(context).brightness.name}",
-                style: TextStyle(color: cs.onSurface.withOpacity(0.55), fontSize: 12),
-              ),
             ],
           );
         },
@@ -332,8 +333,6 @@ class _WeeklyKpiRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     final now = dateOnly(DateTime.now());
 
     final last7 = <MoodEntry>[];
@@ -361,42 +360,29 @@ class _WeeklyKpiRow extends StatelessWidget {
 
     return Row(
       children: [
-        Expanded(child: _kpiTile(context, "Ortalama", avg == 0 ? "-" : avg.toStringAsFixed(1))),
+        Expanded(child: _kpiTile("Ortalama", avg == 0 ? "-" : avg.toStringAsFixed(1))),
         const SizedBox(width: 10),
-        Expanded(child: _kpiTile(context, "Stabilite", stability)),
+        Expanded(child: _kpiTile("Stabilite", stability)),
         const SizedBox(width: 10),
-        Expanded(child: _kpiTile(context, "En iyi", best == null ? "-" : "${scoreOf(best!.mood)}/5")),
+        Expanded(child: _kpiTile("En iyi", best == null ? "-" : "${scoreOf(best!.mood)}/5")),
         const SizedBox(width: 10),
-        Expanded(child: _kpiTile(context, "En zor", worst == null ? "-" : "${scoreOf(worst!.mood)}/5")),
+        Expanded(child: _kpiTile("En zor", worst == null ? "-" : "${scoreOf(worst!.mood)}/5")),
       ],
     );
   }
 
-  Widget _kpiTile(BuildContext context, String label, String value) {
-    final cs = Theme.of(context).colorScheme;
-
+  Widget _kpiTile(String label, String value) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        // ✅ eskiden Colors.black... idi
-        color: cs.onSurface.withOpacity(0.06),
+        color: Colors.black.withValues(alpha: 0.04),
       ),
       child: Column(
         children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 16,
-              color: cs.onSurface,
-            ),
-          ),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
           const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(color: cs.onSurface.withOpacity(0.60), fontSize: 12),
-          ),
+          Text(label, style: TextStyle(color: Colors.black.withValues(alpha: 0.55), fontSize: 12)),
         ],
       ),
     );
@@ -411,15 +397,10 @@ class _MoodTrendLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     if (entries.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(10),
-        child: Text(
-          "Bu ay için veri yok.",
-          style: TextStyle(color: cs.onSurface.withOpacity(0.70)),
-        ),
+      return const Padding(
+        padding: EdgeInsets.all(10),
+        child: Text("Bu ay için veri yok."),
       );
     }
 
@@ -429,7 +410,7 @@ class _MoodTrendLine extends StatelessWidget {
     return SizedBox(
       height: 140,
       child: CustomPaint(
-        painter: _LinePainter(values: values, cs: cs), // ✅ theme aware
+        painter: _LinePainter(values: values),
         child: const SizedBox.expand(),
       ),
     );
@@ -438,24 +419,22 @@ class _MoodTrendLine extends StatelessWidget {
 
 class _LinePainter extends CustomPainter {
   final List<double> values;
-  final ColorScheme cs;
-
-  _LinePainter({required this.values, required this.cs});
+  _LinePainter({required this.values});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final bg = Paint()..color = cs.onSurface.withOpacity(0.06);
+    final bg = Paint()..color = Colors.black.withValues(alpha: 0.04);
     final grid = Paint()
-      ..color = cs.onSurface.withOpacity(0.10)
+      ..color = Colors.black.withValues(alpha: 0.06)
       ..strokeWidth = 1;
 
     final line = Paint()
-      ..color = cs.onSurface.withOpacity(0.80)
+      ..color = Colors.black.withValues(alpha: 0.75)
       ..strokeWidth = 2.2
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    final dot = Paint()..color = cs.onSurface.withOpacity(0.85);
+    final dot = Paint()..color = Colors.black.withValues(alpha: 0.8);
 
     final r = RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(14));
     canvas.drawRRect(r, bg);
@@ -470,6 +449,7 @@ class _LinePainter extends CustomPainter {
     const minV = 1.0, maxV = 5.0;
     double normY(double v) => size.height - ((v - minV) / (maxV - minV)) * size.height;
 
+    // ✅ values.length == 1 ise 0’a bölme yok: tek nokta çiz
     if (values.length == 1) {
       canvas.drawCircle(Offset(size.width * 0.5, normY(values.first)), 3.2, dot);
       return;
@@ -515,8 +495,6 @@ class _HeatMapMini extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     final start = DateTime(month.year, month.month, 1);
     final end = DateTime(month.year, month.month + 1, 1);
 
@@ -530,7 +508,7 @@ class _HeatMapMini extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _weekdayLabels(cs),
+        _weekdayLabels(),
         const SizedBox(height: 10),
         Column(
           children: List.generate(rows, (r) {
@@ -541,12 +519,12 @@ class _HeatMapMini extends StatelessWidget {
                   final idx = r * 7 + c;
                   final dayNum = idx - leadingEmpty + 1;
                   if (dayNum < 1 || dayNum > days) {
-                    return _cell(cs, null);
+                    return _cell(null);
                   }
 
                   final d = dateOnly(DateTime(month.year, month.month, dayNum));
                   final e = entryOf(d);
-                  return _cell(cs, e);
+                  return _cell(e);
                 }),
               ),
             );
@@ -556,7 +534,8 @@ class _HeatMapMini extends StatelessWidget {
     );
   }
 
-  Widget _weekdayLabels(ColorScheme cs) {
+  Widget _weekdayLabels() {
+    // örneğe benzer: tek harf
     const names = ["P", "S", "Ç", "P", "C", "C", "P"];
     return Row(
       children: names
@@ -567,7 +546,7 @@ class _HeatMapMini extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: cs.onSurface.withOpacity(0.50),
+              color: Colors.black.withValues(alpha: 0.45),
             ),
           ),
         ),
@@ -576,16 +555,17 @@ class _HeatMapMini extends StatelessWidget {
     );
   }
 
-  Widget _cell(ColorScheme cs, MoodEntry? e) {
+  Widget _cell(MoodEntry? e) {
+    // ✅ Daha belirgin hücre: yuvarlak + border + emoji
     final bool has = e != null;
 
     final Color fill = has
         ? palette.colorOf(e!.mood).withValues(alpha: 0.90)
-        : cs.onSurface.withOpacity(0.08);
+        : Colors.black.withValues(alpha: 0.06);
 
     final Color border = has
         ? palette.colorOf(e!.mood).withValues(alpha: 0.55)
-        : cs.onSurface.withOpacity(0.14);
+        : Colors.black.withValues(alpha: 0.10);
 
     final String emoji = has ? optionOf(e!.mood).emoji : "";
 
@@ -603,7 +583,7 @@ class _HeatMapMini extends StatelessWidget {
               boxShadow: has
                   ? [
                 BoxShadow(
-                  color: cs.onSurface.withOpacity(0.10),
+                  color: Colors.black.withValues(alpha: 0.08),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 )
@@ -636,9 +616,9 @@ class _WeekdayBars extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     const names = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 
+    // ✅ Daha fazla yükseklik + label alanı sabit -> taşma biter
     return SizedBox(
       height: 160,
       child: Row(
@@ -646,6 +626,7 @@ class _WeekdayBars extends StatelessWidget {
         children: List.generate(7, (i) {
           final v = values[i];
 
+          // Bar yüksekliği (label için altta güvenli alan bıraktık)
           final barMax = 105.0;
           final barMin = 8.0;
           final h = (v == 0) ? barMin : (v / 5.0) * barMax;
@@ -658,6 +639,7 @@ class _WeekdayBars extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                // Bar
                 Container(
                   height: h,
                   width: 16,
@@ -666,7 +648,10 @@ class _WeekdayBars extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
+
                 const SizedBox(height: 8),
+
+                // ✅ Label: kesin sığsın diye sabit yükseklik + FittedBox
                 SizedBox(
                   height: 18,
                   child: FittedBox(
@@ -675,7 +660,7 @@ class _WeekdayBars extends StatelessWidget {
                       names[i],
                       style: TextStyle(
                         fontSize: 12,
-                        color: cs.onSurface.withOpacity(0.65),
+                        color: Colors.black.withValues(alpha: 0.60),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -690,6 +675,7 @@ class _WeekdayBars extends StatelessWidget {
   }
 }
 
+
 class _StreakRow extends StatelessWidget {
   final int current;
   final int best;
@@ -700,38 +686,26 @@ class _StreakRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: _tile(context, "Mevcut Seri", "🔥 $current gün")),
+        Expanded(child: _tile("Mevcut Seri", "🔥 $current gün")),
         const SizedBox(width: 10),
-        Expanded(child: _tile(context, "En Uzun Seri", "🏆 $best gün")),
+        Expanded(child: _tile("En Uzun Seri", "🏆 $best gün")),
       ],
     );
   }
 
-  Widget _tile(BuildContext context, String label, String value) {
-    final cs = Theme.of(context).colorScheme;
-
+  Widget _tile(String label, String value) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        color: cs.onSurface.withOpacity(0.06),
+        color: Colors.black.withValues(alpha: 0.04),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 16,
-              color: cs.onSurface,
-            ),
-          ),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
           const SizedBox(height: 6),
-          Text(
-            label,
-            style: TextStyle(color: cs.onSurface.withOpacity(0.60), fontSize: 12),
-          ),
+          Text(label, style: TextStyle(color: Colors.black.withValues(alpha: 0.55), fontSize: 12)),
         ],
       ),
     );
@@ -751,23 +725,18 @@ class _RecentList extends StatelessWidget {
 
   String _fmt(DateTime d) {
     const months = [
-      "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
-      "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"
+      "Ocak","Şubat","Mart","Nisan","Mayıs","Haziran",
+      "Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"
     ];
     return "${d.day.toString().padLeft(2, "0")} ${months[d.month - 1]}, ${d.year}";
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     if (entries.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Text(
-          "Henüz kayıt yok.",
-          style: TextStyle(color: cs.onSurface.withOpacity(0.70)),
-        ),
+      return const Padding(
+        padding: EdgeInsets.all(8.0),
+        child: Text("Henüz kayıt yok."),
       );
     }
 
@@ -799,19 +768,16 @@ class _RecentList extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        _fmt(e.day),
-                        style: TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface),
-                      ),
+                      Text(_fmt(e.day), style: const TextStyle(fontWeight: FontWeight.w700)),
                       const SizedBox(height: 2),
                       Text(
                         e.title.isEmpty ? "Kayıt" : e.title,
-                        style: TextStyle(color: cs.onSurface.withOpacity(0.60), fontSize: 12),
+                        style: TextStyle(color: Colors.black.withValues(alpha: 0.55), fontSize: 12),
                       ),
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right, color: cs.onSurface.withOpacity(0.40)),
+                Icon(Icons.chevron_right, color: Colors.black.withValues(alpha: 0.35)),
               ],
             ),
           ),

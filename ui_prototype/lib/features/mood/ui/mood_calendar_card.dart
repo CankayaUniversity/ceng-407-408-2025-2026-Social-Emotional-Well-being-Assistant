@@ -23,14 +23,9 @@ class MoodCalendarCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final base = Theme.of(context);
     final cs = base.colorScheme;
-    final isDark = base.brightness == Brightness.dark;
 
     final accent = cs.primary;
     final palette = kDefaultMoodPalette;
-
-    // ✅ Takvim içi yazılar daha net olsun
-    final headerText = cs.onSurface.withOpacity(isDark ? 0.95 : 0.90);
-    final dowText = cs.onSurface.withOpacity(isDark ? 0.72 : 0.62);
 
     return Container(
       decoration: BoxDecoration(
@@ -139,32 +134,31 @@ class MoodCalendarCard extends StatelessWidget {
               formatButtonVisible: false,
               leftChevronIcon: Icon(Icons.chevron_left, color: accent),
               rightChevronIcon: Icon(Icons.chevron_right, color: accent),
-              // ✅ eskiden Colors.black idi -> theme
-              titleTextStyle: TextStyle(
+              titleTextStyle: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w900,
-                color: headerText,
+                color: Colors.black,
               ),
               headerPadding: const EdgeInsets.only(bottom: 8),
             ),
 
-            // ✅ Mon Tue Wed… yazıları netleştir
-            daysOfWeekStyle: DaysOfWeekStyle(
+            daysOfWeekStyle: const DaysOfWeekStyle(
               weekdayStyle: TextStyle(
                 fontWeight: FontWeight.w800,
-                color: dowText,
+                color: Color(0xFF6B6B6B),
               ),
               weekendStyle: TextStyle(
                 fontWeight: FontWeight.w800,
-                color: dowText,
+                color: Color(0xFF6B6B6B),
               ),
             ),
 
-            calendarStyle: const CalendarStyle(
+            calendarStyle: CalendarStyle(
               outsideDaysVisible: false,
-              cellMargin: EdgeInsets.symmetric(horizontal: 3, vertical: 4),
-              todayDecoration: BoxDecoration(shape: BoxShape.circle),
-              selectedDecoration: BoxDecoration(shape: BoxShape.circle),
+              // biraz küçülttük ki rahat sığsın
+              cellMargin: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+              todayDecoration: const BoxDecoration(shape: BoxShape.circle),
+              selectedDecoration: const BoxDecoration(shape: BoxShape.circle),
             ),
 
             calendarBuilders: CalendarBuilders(
@@ -172,7 +166,6 @@ class MoodCalendarCard extends StatelessWidget {
                 day: day,
                 palette: palette,
                 accent: accent,
-                cs: cs,
                 entry: entryOf(dateOnly(day)),
                 isSelected: false,
                 isToday: isSameDay(day, DateTime.now()),
@@ -181,7 +174,6 @@ class MoodCalendarCard extends StatelessWidget {
                 day: day,
                 palette: palette,
                 accent: accent,
-                cs: cs,
                 entry: entryOf(dateOnly(day)),
                 isSelected: false,
                 isToday: true,
@@ -190,7 +182,6 @@ class MoodCalendarCard extends StatelessWidget {
                 day: day,
                 palette: palette,
                 accent: accent,
-                cs: cs,
                 entry: entryOf(dateOnly(day)),
                 isSelected: true,
                 isToday: isSameDay(day, DateTime.now()),
@@ -206,7 +197,6 @@ class MoodCalendarCard extends StatelessWidget {
     required DateTime day,
     required MoodPalette palette,
     required Color accent,
-    required ColorScheme cs,
     required MoodEntry? entry,
     required bool isSelected,
     required bool isToday,
@@ -215,13 +205,13 @@ class MoodCalendarCard extends StatelessWidget {
 
     final Color fill = has
         ? palette.colorOf(entry!.mood).withValues(alpha: 0.90)
-        : cs.onSurface.withOpacity(0.08);
+        : Colors.black.withValues(alpha: 0.07);
 
     final Color border = isSelected
         ? accent.withValues(alpha: 0.95)
         : isToday
         ? accent.withValues(alpha: 0.95)
-        : cs.onSurface.withOpacity(0.18);
+        : Colors.black.withValues(alpha: 0.14);
 
     final Color ring = isSelected
         ? accent.withValues(alpha: 0.22)
@@ -231,11 +221,11 @@ class MoodCalendarCard extends StatelessWidget {
 
     final String emoji = has ? optionOf(entry!.mood).emoji : "";
 
-    // ✅ Gün numaraları netleştirildi
     final Color dayTextColor = isToday
         ? accent.withValues(alpha: 0.95)
-        : cs.onSurface.withOpacity(0.75);
+        : Colors.black.withValues(alpha: 0.65);
 
+    // ✅ Hücreyi sabitle -> overflow yok
     return SizedBox(
       height: 62,
       child: Column(

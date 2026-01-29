@@ -19,22 +19,17 @@ class StatsSheet {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) {
-        final theme = Theme.of(context);
-        final cs = theme.colorScheme;
-
         return Padding(
           padding: const EdgeInsets.all(12),
           child: Container(
             decoration: BoxDecoration(
-              color: cs.surface,
+              color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(20),
-              boxShadow: [
+              boxShadow: const [
                 BoxShadow(
                   blurRadius: 24,
-                  offset: const Offset(0, 12),
-                  color: Colors.black.withOpacity(
-                    theme.brightness == Brightness.dark ? 0.35 : 0.12,
-                  ),
+                  offset: Offset(0, 12),
+                  color: Color(0x22000000),
                 )
               ],
             ),
@@ -45,20 +40,20 @@ class StatsSheet {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const _Grabber(),
-                    const _Header(),
+                    _Grabber(),
+                    _Header(),
+
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
                         "Hafta: ${DateFormat("d MMM", "tr_TR").format(weekStart)} - "
                             "${DateFormat("d MMM", "tr_TR").format(weekStart.add(const Duration(days: 6)))}",
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: cs.onSurfaceVariant.withOpacity(0.85),
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w600),
                       ),
                     ),
+
                     const SizedBox(height: 14),
+
                     Row(
                       children: [
                         _RingProgress(value: ratio),
@@ -72,19 +67,18 @@ class StatsSheet {
                         ),
                       ],
                     ),
+
                     const SizedBox(height: 14),
-                    Align(
+
+                    const Align(
                       alignment: Alignment.centerLeft,
-                      child: Text(
-                        "Alışkanlıklarım",
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          color: cs.onSurface,
-                        ),
-                      ),
+                      child: Text("Alışkanlıklarım",
+                          style: TextStyle(fontWeight: FontWeight.w900)),
                     ),
                     const SizedBox(height: 8),
+
                     ...habits.map((h) => _HabitRow(h)),
+
                     const SizedBox(height: 12),
                   ],
                 ),
@@ -112,17 +106,14 @@ class HabitStat {
 }
 
 class _Grabber extends StatelessWidget {
-  const _Grabber();
-
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Container(
       width: 42,
       height: 5,
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: cs.onSurfaceVariant.withOpacity(0.25),
+        color: Colors.black12,
         borderRadius: BorderRadius.circular(999),
       ),
     );
@@ -130,27 +121,18 @@ class _Grabber extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header();
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
     return Row(
       children: [
         IconButton(
           onPressed: () => Navigator.pop(context),
-          icon: Icon(Icons.arrow_back_rounded, color: cs.onSurface),
+          icon: const Icon(Icons.arrow_back_rounded),
         ),
-        Expanded(
+        const Expanded(
           child: Text(
             "Alışkanlık Geçmişi",
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              color: cs.onSurface,
-            ),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
           ),
         ),
       ],
@@ -165,24 +147,16 @@ class _RingProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final pct = (value * 100).round();
-
     return Container(
       width: 130,
       padding: const EdgeInsets.all(12),
-      decoration: _softBox(context),
+      decoration: _box(),
       child: Column(
         children: [
-          Text(
-            "Başarı Oranı",
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: cs.onSurface,
-            ),
-          ),
+          const Text("Başarı Oranı",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontWeight: FontWeight.w900)),
           const SizedBox(height: 10),
           SizedBox(
             width: 80,
@@ -193,15 +167,11 @@ class _RingProgress extends StatelessWidget {
                 CircularProgressIndicator(
                   value: value.clamp(0, 1),
                   strokeWidth: 10,
-                  backgroundColor: cs.outlineVariant.withOpacity(0.35),
+                  backgroundColor: Colors.black12,
                 ),
-                Text(
-                  "%$pct",
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: cs.onSurface,
-                  ),
-                ),
+                Text("%$pct",
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w900, fontSize: 18)),
               ],
             ),
           ),
@@ -224,44 +194,31 @@ class _WeeklyBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
     final days = daysOfWeek(day);
     final doneDays = days.where(isDailyTargetCompleted).length;
     final badge = doneDays >= 4;
 
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: _softBox(context),
+      decoration: _box(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            "Haftalık Rozet",
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: cs.onSurface,
-            ),
-          ),
+          const Text("Haftalık Rozet",
+              style: TextStyle(fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
           Row(
             children: [
-              Icon(
-                badge ? Icons.emoji_events_rounded : Icons.lock_rounded,
-                color: badge
-                    ? const Color(0xFFFFC107)
-                    : cs.onSurfaceVariant.withOpacity(0.6),
-              ),
+              Icon(badge ? Icons.emoji_events_rounded : Icons.lock_rounded,
+                  color: badge ? const Color(0xFFFFC107) : Colors.black38),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  badge ? "Tebrikler! (4/7 gün)" : "Rozet için 4 gün hedef tamamla",
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: cs.onSurfaceVariant.withOpacity(0.78),
-                    fontWeight: FontWeight.w600,
-                    height: 1.25,
-                  ),
+                  badge
+                      ? "Tebrikler! (4/7 gün)"
+                      : "Rozet için 4 gün hedef tamamla",
+                  style: const TextStyle(
+                      color: Colors.black54, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -276,9 +233,7 @@ class _WeeklyBadge extends StatelessWidget {
                   margin: const EdgeInsets.symmetric(horizontal: 2),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(999),
-                    color: ok
-                        ? const Color(0xFFFFC107)
-                        : cs.outlineVariant.withOpacity(0.25),
+                    color: ok ? const Color(0xFFFFC107) : Colors.black12,
                   ),
                 ),
               );
@@ -296,14 +251,11 @@ class _HabitRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final pct = (stat.ratio * 100).round();
-
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
-      decoration: _softBox(context),
+      decoration: _box(),
       child: Row(
         children: [
           Text(stat.emoji, style: const TextStyle(fontSize: 18)),
@@ -312,50 +264,31 @@ class _HabitRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  stat.title,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: cs.onSurface,
-                  ),
-                ),
+                Text(stat.title,
+                    style: const TextStyle(fontWeight: FontWeight.w900)),
                 const SizedBox(height: 8),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(999),
                   child: LinearProgressIndicator(
                     value: stat.ratio.clamp(0, 1),
                     minHeight: 10,
-                    backgroundColor: cs.outlineVariant.withOpacity(0.25),
+                    backgroundColor: Colors.black12,
                   ),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 10),
-          Text(
-            "%$pct",
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: cs.onSurface,
-            ),
-          ),
+          Text("%$pct",
+              style: const TextStyle(fontWeight: FontWeight.w900)),
         ],
       ),
     );
   }
 }
 
-BoxDecoration _softBox(BuildContext context) {
-  final theme = Theme.of(context);
-  final cs = theme.colorScheme;
-  final isDark = theme.brightness == Brightness.dark;
-
-  final bg = isDark ? cs.surfaceContainerHigh : cs.surfaceContainerHighest;
-  final border = cs.outlineVariant.withOpacity(isDark ? 0.55 : 0.8);
-
-  return BoxDecoration(
-    color: bg,
-    borderRadius: BorderRadius.circular(16),
-    border: Border.all(color: border, width: 1),
-  );
-}
+BoxDecoration _box() => BoxDecoration(
+  color: Colors.black.withOpacity(.03),
+  borderRadius: BorderRadius.circular(16),
+  border: Border.all(color: Colors.black12),
+);

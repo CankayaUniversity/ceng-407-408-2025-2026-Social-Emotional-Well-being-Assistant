@@ -2,10 +2,20 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'data/emergency_contact_store.dart';
 import 'ui/trusted_contacts_sheet.dart';
+
+// ✅ HomeStore (Hive user bazlı)
+import 'package:ui_prototype/features/home/data/home_store.dart';
+
+// ✅ Login’e dönmek için
+import 'package:ui_prototype/features/auth/login_screen.dart';
+
+// Mood store varsa:
+// import 'package:ui_prototype/features/mood/data/mood_store.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String loginUsername;
@@ -17,9 +27,6 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   File? _avatarFile;
-
-  // 🔐 Trusted contacts (çoklu)
-  List<EmergencyContact> _trustedContacts = [];
 
   bool _anonymousMode = true;
   bool _moodReminder = true;
@@ -39,7 +46,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _realName = widget.loginUsername;
     _applyNicknameByMode();
 
-    _trustedContacts = EmergencyContactStore.instance.readAll();
+    _loadContacts();
+  }
+
+  Future<void> _loadContacts() async {
+    try {
+      await EmergencyContactStore.instance.load();
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Trusted contacts alınamadı: $e")),
+      );
+    }
   }
 
   @override
@@ -53,7 +72,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _applyNicknameByMode() {
     _nicknameController.text = _anonymousMode ? "Anonymous" : _realName;
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   void _toggleAnonymous(bool v) {
@@ -67,23 +86,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _avatarFile = File(picked.path));
   }
 
-  /// 🔐 Crisis help → trusted contacts yönetimi (TEK YER)
   Future<void> _openTrustedContactsManager() async {
     final changed = await TrustedContactsSheet.open(context);
-    if (!changed || !mounted) return;
-    setState(() {
-      _trustedContacts = EmergencyContactStore.instance.readAll();
-    });
+    if (!mounted) return;
+
+    if (changed) {
+      await _loadContacts();
+    }
   }
 
-  /// 📩 İlk kişiye hızlı SMS (istersen bu butonu da sadece sheet içine taşıyabiliriz)
   Future<void> _sendSmsToFirstContact() async {
-    if (_trustedContacts.isEmpty) {
+    final contacts = EmergencyContactStore.instance.contacts;
+
+    if (contacts.isEmpty) {
       await _openTrustedContactsManager();
       return;
     }
 
-    final c = _trustedContacts.first;
+    final c = contacts.first;
     final body = Uri.encodeComponent(
       "Merhaba ${c.fullName}, acil bir durumda sana ulaşmam gerekiyor. Müsait misin?",
     );
@@ -105,18 +125,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  /// ✅ Logout: token sil + store reset + login’e dön
+  Future<void> _logout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove("auth_token");
+    await prefs.remove("user_email");
+    await prefs.remove("user_name");
+    await prefs.remove("user_id");
+
+    // ✅ Store reset (doğru fonksiyonlar)
+    HomeStore.instance.reset();
+    EmergencyContactStore.instance.reset();
+    // MoodStore varsa:
+    // MoodStore.instance.reset();
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final avatar = _avatarFile == null
         ? const CircleAvatar(radius: 28, child: Icon(Icons.person))
         : CircleAvatar(radius: 28, backgroundImage: FileImage(_avatarFile!));
 
+    final trustedContacts = EmergencyContactStore.instance.contacts;
+    final loadingContacts = EmergencyContactStore.instance.loading;
+
     return Scaffold(
-      appBar: AppBar(title: const Text("Profile")),
+      appBar: AppBar(
+        title: const Text("Profile"),
+        actions: [
+          IconButton(
+            tooltip: "Logout",
+            onPressed: _logout,
+            icon: const Icon(Icons.logout),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // ───────── Header ─────────
           Card(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: Padding(
@@ -190,7 +243,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             icon: Icons.visibility_off,
           ),
 
-          // 🆘 CRISIS HELP — TEK YERDEN EKLEME/YÖNETİM
           Card(
             child: ListTile(
               leading: const Icon(Icons.health_and_safety),
@@ -199,9 +251,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 style: TextStyle(fontWeight: FontWeight.w900),
               ),
               subtitle: Text(
-                _trustedContacts.isEmpty
+                loadingContacts
+                    ? "Loading trusted contacts..."
+                    : (trustedContacts.isEmpty
                     ? "Emergency resources / trusted contacts"
-                    : "Trusted contacts: ${_trustedContacts.length} kişi",
+                    : "Trusted contacts: ${trustedContacts.length} kişi"),
               ),
               trailing: Wrap(
                 spacing: 4,
@@ -240,8 +294,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
-
-  // ───────── Helpers ─────────
 
   Widget _sectionTitle(String text) {
     return Padding(

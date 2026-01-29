@@ -1,5 +1,5 @@
 name: ui_prototype
-description: 'A new Flutter project.'
+description: A new Flutter project.
 publish_to: none
 
 version: 1.0.0+1
@@ -15,25 +15,27 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  # ✅ HTTP (Backend API çağrıları için)
+  # 🌐 HTTP (Node.js Backend API çağrıları)
   http: ^1.2.2
 
-  # ✅ TOKEN saklamak için (Login sonrası)
+  # 🔐 TOKEN saklamak için (JWT)
   shared_preferences: ^2.2.3
 
-  # UI & Utils
+  # 🎨 UI
   cupertino_icons: ^1.0.8
   image_picker: ^1.1.2
 
-  # Calendar & Date
+  # 📅 Calendar & Date
   table_calendar: ^3.2.0
   intl: ^0.20.2
 
-  # ✅ HIVE (sekme değişince + app kapanıp açılınca veri kalıcılığı)
+  # 📦 HIVE
+  # ⚠️ Artık Home verileri için DEĞİL
+  # (Sadece local UI/cache ihtiyaçları için kullanılabilir)
   hive: ^2.2.3
   hive_flutter: ^1.1.0
 
-  # ✅ SMS / arama / link açmak için (Crisis Help)
+  # 📞 SMS / arama / link açmak için (Crisis Help)
   url_launcher: ^6.3.0
 
 dev_dependencies:

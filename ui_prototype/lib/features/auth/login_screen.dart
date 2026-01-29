@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:ui_prototype/app.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'register_screen.dart';
+import 'services/auth_api.dart';
+
+// ✅ Store importları
+import 'package:ui_prototype/features/home/data/home_store.dart';
+import 'package:ui_prototype/features/profile/data/emergency_contact_store.dart';
+// Mood store varsa aç:
+// import 'package:ui_prototype/features/mood/data/mood_store.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,32 +19,94 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _usernameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+
   bool _obscure = true;
+  bool _isLoading = false;
 
   @override
   void dispose() {
-    _usernameCtrl.dispose();
+    _emailCtrl.dispose();
     _passwordCtrl.dispose();
     super.dispose();
   }
 
-  void _login() {
-    final username = _usernameCtrl.text.trim();
+  Future<void> _login() async {
+    final email = _emailCtrl.text.trim();
     final password = _passwordCtrl.text;
 
-    if (username.isEmpty || password.isEmpty) {
+    if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Username ve Password boş olamaz.")),
+        const SnackBar(content: Text("Email ve Password boş olamaz.")),
       );
       return;
     }
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => HomeShell(username: username)),
-    );
+    setState(() => _isLoading = true);
+
+    try {
+      final result = await AuthApi.login(email: email, password: password);
+
+      final token = (result["token"] ?? "").toString();
+      final user = (result["user"] ?? {}) as Map<String, dynamic>;
+
+      if (token.isEmpty) {
+        throw Exception("Token alınamadı.");
+      }
+
+      // ✅ userId zorunlu (HomeStore user bazlı)
+      final dynamic rawId = user["id"];
+      final int userId = (rawId is num)
+          ? rawId.toInt()
+          : int.tryParse(rawId?.toString() ?? "") ?? -1;
+
+      if (userId <= 0) {
+        throw Exception("User id alınamadı. Login response içinde user.id olmalı.");
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+
+      // ✅ KRİTİK: ApiClient/TokenStore ile aynı key olmalı
+      await prefs.setString("auth_token", token);
+
+      // (opsiyonel bilgi saklama)
+      await prefs.setInt("user_id", userId);
+      await prefs.setString("user_email", (user["email"] ?? "").toString());
+      await prefs.setString("user_name", (user["name"] ?? "").toString());
+
+      // ✅ KRİTİK: HomeStore'u bu kullanıcıya bağla (Hive key user bazlı)
+      // NOT: setUser async olduğu için await şart
+      await HomeStore.instance.setUser(userId);
+
+      // ✅ Crisis Help backend’den çekiliyor -> token kaydedildikten sonra çağır
+      await EmergencyContactStore.instance.load();
+
+      // Mood store varsa:
+      // final now = DateTime.now();
+      // final month =
+      //     "${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}";
+      // await MoodStore.instance.loadMonth(month);
+
+      if (!mounted) return;
+
+      final displayName =
+      (user["name"] != null && user["name"].toString().trim().isNotEmpty)
+          ? user["name"].toString()
+          : email;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => HomeShell(username: displayName)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceAll("Exception: ", ""))),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _goRegister() async {
@@ -47,7 +117,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (result == null) return;
 
-    _usernameCtrl.text = result['username'] ?? '';
+    _emailCtrl.text = result['username'] ?? '';
     _passwordCtrl.text = result['password'] ?? '';
 
     if (!mounted) return;
@@ -67,10 +137,8 @@ class _LoginScreenState extends State<LoginScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             return SingleChildScrollView(
-              // ✅ klavye açılınca alttan boşluk bırak
               padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
               child: ConstrainedBox(
-                // ✅ ekranı doldur (ama küçükse de scroll yap)
                 constraints: BoxConstraints(minHeight: constraints.maxHeight),
                 child: IntrinsicHeight(
                   child: Padding(
@@ -84,15 +152,19 @@ class _LoginScreenState extends State<LoginScreen> {
                         const Text(
                           "Welcome Back",
                           textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         const SizedBox(height: 24),
 
                         TextField(
-                          controller: _usernameCtrl,
+                          controller: _emailCtrl,
                           textInputAction: TextInputAction.next,
+                          keyboardType: TextInputType.emailAddress,
                           decoration: const InputDecoration(
-                            labelText: "Username",
+                            labelText: "Email",
                             border: OutlineInputBorder(),
                           ),
                         ),
@@ -106,7 +178,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             labelText: "Password",
                             border: const OutlineInputBorder(),
                             suffixIcon: IconButton(
-                              icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
+                              icon: Icon(
+                                _obscure ? Icons.visibility : Icons.visibility_off,
+                              ),
                               onPressed: () => setState(() => _obscure = !_obscure),
                             ),
                           ),
@@ -114,10 +188,16 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 16),
 
                         ElevatedButton(
-                          onPressed: _login,
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            child: Text("Login"),
+                          onPressed: _isLoading ? null : _login,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: _isLoading
+                                ? const SizedBox(
+                              height: 18,
+                              width: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                                : const Text("Login"),
                           ),
                         ),
 
@@ -130,7 +210,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: const Text("Forgot password?"),
                         ),
 
-                        // ✅ Spacer yerine Expanded kullan (IntrinsicHeight ile uyumlu)
                         const Expanded(child: SizedBox()),
 
                         Row(
