@@ -13,8 +13,16 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3000;
 
+app.get("/health", (req, res) => {
+    res.status(200).json({ ok: true });
+});
+
+const logToRailway = (message) => {
+    console.log(message); // Logs to Railway
+};
+
 io.on("connection", (socket) => {
-    console.log(`[CONNECT] (${socket.id})`);
+    logToRailway(`[CONNECT] (${socket.id})`);
 
     // Join room
     socket.on("join-room", ({ room, username }) => {
@@ -25,14 +33,14 @@ io.on("connection", (socket) => {
             socket.to(prevRoom).emit("system-message", {
                 message: `${socket.data.username ?? username} left ${prevRoom}`,
             });
-            console.log(`[SWITCH] ${socket.data.username ?? username} left ${prevRoom}`);
+            logToRailway(`[SWITCH] ${socket.data.username ?? username} left ${prevRoom}`);
         }
 
         socket.join(room);
         socket.data.username = username;
         socket.data.room = room;
 
-        console.log(`[JOIN] ${username} joined ${room}`);
+        logToRailway(`[JOIN] ${username} joined ${room}`);
 
         socket.to(room).emit("system-message", {
             message: `${username} joined ${room}`,
@@ -43,12 +51,12 @@ io.on("connection", (socket) => {
     socket.on("send-message", (message) => {
         const { room, username } = socket.data;
         if (!room) {
-            console.error(`[ERROR] User ${username ?? "<unknown>"} tried to send message without joining a room.`);
+            logToRailway(`[ERROR] User ${username ?? "<unknown>"} tried to send message without joining a room.`);
             return;
         }
 
         if (!socket.rooms.has(room)) {
-            console.error(`[ERROR] User ${username ?? "<unknown>"} tried to send message to ${room} without being in that room.`);
+            logToRailway(`[ERROR] User ${username ?? "<unknown>"} tried to send message to ${room} without being in that room.`);
             return;
         }
 
@@ -64,7 +72,7 @@ io.on("connection", (socket) => {
     socket.on("leave-room", () => {
         const { room, username } = socket.data;
         if (!room) {
-            console.error(`[ERROR] User ${username ?? "<unknown>"} tried to leave room without joining one.`);
+            logToRailway(`[ERROR] User ${username ?? "<unknown>"} tried to leave room without joining one.`);
             return;
         }
 
@@ -72,7 +80,7 @@ io.on("connection", (socket) => {
         socket.to(room).emit("system-message", {
             message: `${username} left ${room}`
         });
-        console.log(`[LEAVE] ${username} left ${room}`);
+        logToRailway(`[LEAVE] ${username} left ${room}`);
 
         socket.data.room = null;
     });
@@ -80,7 +88,7 @@ io.on("connection", (socket) => {
     // Disconnect
     socket.on("disconnect", () => {
         const { username } = socket.data;
-        console.log(`[DISCONNECT] ${username ?? "<unknown>"} (${socket.id})`);
+        logToRailway(`[DISCONNECT] ${username ?? "<unknown>"} (${socket.id})`);
     });
 });
 

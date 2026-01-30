@@ -1,7 +1,8 @@
 const { io } = require("socket.io-client");
 const readline = require("readline");
 
-const socket = io("http://localhost:3000");
+const serverUrl = "https://hopeful-empathy-production-a9ff.up.railway.app";
+const socket = io(serverUrl);
 
 const rl = readline.createInterface({
     input: process.stdin,
@@ -14,6 +15,7 @@ let currentRoom = null;
 
 socket.on("connect", () => {
     console.log(`Connected as ${username}`);
+    console.log(`Server: ${serverUrl}`);
 
     rl.question("Enter room name: ", (room) => {
         currentRoom = room;
