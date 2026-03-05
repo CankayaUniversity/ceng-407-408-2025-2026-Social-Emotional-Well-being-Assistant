@@ -1,7 +1,14 @@
 const { io } = require("socket.io-client");
 const readline = require("readline");
 
-const serverUrl = "https://hopeful-empathy-production-a9ff.up.railway.app";
+const DEFAULT_SERVER_URL = "https://sewa-community-chatroom-production.up.railway.app";
+
+const serverUrl =
+    process.argv[2] ||
+    process.env.SERVER_URL ||
+    DEFAULT_SERVER_URL ||
+    "http://localhost:3000";
+
 const socket = io(serverUrl);
 
 const rl = readline.createInterface({
