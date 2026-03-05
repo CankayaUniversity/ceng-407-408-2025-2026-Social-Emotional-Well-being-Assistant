@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'token_store.dart';
 
 class ApiClient {
-  static const String baseUrl = "http://10.0.2.2:3000/api";
+  static const String baseUrl = "http://10.0.2.2:3001/api";
 
   static Future<Map<String, String>> _headers({bool json = true}) async {
     final headers = <String, String>{};

@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 
 class AuthApi {
   // Android Emulator: PC'deki localhost'a ulaşmak için 10.0.2.2 kullanılır
-  static const String baseUrl = "http://10.0.2.2:3000/api";
+  static const String baseUrl = "http://10.0.2.2:3001/api";
 
   static Future<Map<String, dynamic>> login({
     required String email,

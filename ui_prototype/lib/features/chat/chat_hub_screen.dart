@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'ai_chat_screen.dart';
+import 'community_rooms_screen.dart';
 
 class ChatHubScreen extends StatelessWidget {
   const ChatHubScreen({super.key});
@@ -30,8 +31,9 @@ class ChatHubScreen extends StatelessWidget {
               title: const Text('Community Rooms'),
               subtitle: const Text('Join anonymous group chats'),
               onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Community Rooms (UI draft)')),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CommunityRoomsScreen()),
                 );
               },
             ),
