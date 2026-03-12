@@ -1,20 +1,18 @@
-# # Hugging Face Trainer checkpoints
-# emotion_tr_bert/checkpoint-*/
+# Hugging Face Trainer checkpoints
+/emotion_tr_bert/
 
-# # TensorBoard logs
-# emotion_tr_bert/runs/
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
-# # Python cache
-# __pycache__/
-# *.pyc
-# *.pyo
-# *.pyd
+# Virtual environment
+venv/
+.venv/
 
-# # Virtual environment
-# venv/
-# .venv/
-
-# # IDE configuration
-# .vscode/
-# .idea/
+# IDE configuration
+.vscode/
+.idea/
 /Dataset/
+*.csv
