@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'data/mood_repository.dart';
 import 'models/mood_models.dart';
-import 'ui/mood_themecard.dart';
+import 'ui/mood_theme_card.dart';
 
 class MoodThemeScreen extends StatelessWidget {
   final MoodRepository repo;
@@ -14,7 +14,7 @@ class MoodThemeScreen extends StatelessWidget {
       appBar: AppBar(title: const Text("Ruh Hali Özelleştirme")),
       body: AnimatedBuilder(
         animation: repo,
-        builder: (context, ) {
+        builder: (context, _) {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
