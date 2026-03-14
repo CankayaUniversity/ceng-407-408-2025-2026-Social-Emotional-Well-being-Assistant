@@ -19,7 +19,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _loading = false;
 
   // ✅ Android Emulator için backend URL
-  static const String _baseUrl = "http://10.0.2.2:3001";
+  static const String _baseUrl = "https://backend-production-66b91.up.railway.app";
 
   @override
   void dispose() {
