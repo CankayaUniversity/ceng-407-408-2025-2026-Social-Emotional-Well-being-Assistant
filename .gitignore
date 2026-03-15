@@ -10,4 +10,16 @@ venv/
 node_modules/
 
 .vscode/
+.idea/
 .DS_Store
+
+build/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+
+linux/build/
+macos/build/
+windows/build/
+ios/build/
+android/build/
