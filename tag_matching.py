@@ -53,8 +53,56 @@ emotion_to_genre_weight_mappings = {
     }
 }
 
+emotion_to_category_weight_mappings = {
+    "Joy": {
+        "Arts & Culture": 1.0, "Fiction & Narrative": 0.9, "Children & Young Adult": 0.8,
+        "Practical & How-To": 0.7, "Health & Wellness": 0.7, "Education & Learning": 0.6,
+        "Science & Nature": 0.5,
+        "True Crime & Mystery": -0.7, "History, Biography & Culture": -0.6, "Religion & Spirituality": -0.5
+    },
+    "Sadness": {
+        "Children & Young Adult": 1.0, "Fiction & Narrative": 0.8, "Practical & How-To": 0.7,
+        "Education & Learning": 0.6, "Self-Help & Personal Development": 0.5,
+        "True Crime & Mystery": -0.5, "Business & Professional": -0.4, "Travel & Geography": -0.3
+    },
+    "Fear": {
+        "Children & Young Adult": 1.0, "Arts & Culture": 0.9, "Fiction & Narrative": 0.8,
+        "Practical & How-To": 0.7, "Science & Nature": 0.6,
+        "True Crime & Mystery": -1.0, "Business & Professional": -1.0, "History, Biography & Culture": -0.6,
+        "Religion & Spirituality": -0.5
+    },
+    "Anger": {
+        "Business & Professional": 1.0, "Practical & How-To": 0.8, "Arts & Culture": 0.7,
+        "Science & Nature": 0.6, "Travel & Geography": 0.5,
+        "Education & Learning": -0.8, "Fiction & Narrative": -0.6, "Children & Young Adult": -0.5
+    },
+    "Despondent": {
+        "Fiction & Narrative": 0.9, "Science & Nature": 0.8,
+        "Practical & How-To": 0.7, "Self-Help & Personal Development": 0.6,
+        "Arts & Culture": -0.8, "Education & Learning": -0.7, "Children & Young Adult": -0.6
+    },
+    "Excitement": {
+        "Business & Professional": 1.0, "Practical & How-To": 0.9, "Science & Nature": 0.8,
+        "Travel & Geography": 0.7, "History, Biography & Culture": 0.6,
+        "Religion & Spirituality": -0.6, "Self-Help & Personal Development": -0.5, "Education & Learning": -0.3
+    },
+    "Curiosity": {
+        "History, Biography & Culture": 1.0, "Travel & Geography": 0.9, "Science & Nature": 0.9,
+        "True Crime & Mystery": 0.8, "Self-Help & Personal Development": 0.6,
+        "Children & Young Adult": -0.8, "Education & Learning": -0.5, "Arts & Culture": -0.4
+    },
+    "Anxious": {
+        "Fiction & Narrative": 1.0, "Science & Nature": 0.8, "Self-Help & Personal Development": 0.7,
+        "Practical & How-To": 0.6, "Children & Young Adult": 0.5,
+        "True Crime & Mystery": -1.0, "Business & Professional": -1.0, "Religion & Spirituality": -0.9,
+        "Travel & Geography": -0.4
+    }
+}
+
 DATASET = Path(__file__).resolve().parent / "Dataset" / "movies_enriched.csv"
-USER_FAVORITES = Path(__file__).resolve().parent / "user_favorite_movies.json"
+BOOKS_DATASET = Path(__file__).resolve().parent / "Dataset" / "books_enriched_recategorized.csv"
+USER_FAVORITES_MOVIES = Path(__file__).resolve().parent / "user_favorite_movies.json"
+USER_FAVORITES_BOOKS = Path(__file__).resolve().parent / "user_favorite_books.json"
 
 def find_dataset(path: Path) -> Path:
     p = Path(path)
@@ -88,7 +136,7 @@ def print_genres(path: Path) -> None:
 def get_final_score(total_weight: float, rating_count: int, rating_mean: float) -> float:
   
     if rating_count < 2000:
-        weight_factor = rating_count / 2000  # Scale down score for movies with less than 2000 ratings
+        weight_factor = rating_count / 2000
     else:
         weight_factor = 1.0
 
@@ -96,53 +144,68 @@ def get_final_score(total_weight: float, rating_count: int, rating_mean: float) 
     return final_score
 
 
-def load_and_parse_movies(path: Path) -> list[dict]:
-    movies_data = []
+def load_and_parse_data(path: Path) -> list[dict]:
+    data = []
     with path.open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             try:
                 row["rating_count"] = int(row.get("rating_count", "0").strip() or 0.0)
                 row["rating_mean"] = float(row.get("rating_mean", "0.0").strip() or 0.0)
-                movies_data.append(row)
+                data.append(row)
             except (ValueError, TypeError):
                 continue
-    return movies_data
-
-import json
+    return data
 
 
-def get_favorite_genre_weights(movies_data: list[dict], json_path: Path) -> dict[str, float]:
+def get_favorite_genre_weights(data: list[dict], json_path: Path, is_movie: bool = True) -> dict[str, float]:
+    
+    if not json_path.exists():
+        return {}
     
     with json_path.open(encoding="utf-8") as f:
-        data = json.load(f)
+        json_data = json.load(f)
 
-    favorite_titles = set(data.get("user_favorite_movies", []))
+    if is_movie:
+        favorite_titles = set(json_data.get("user_favorite_movies", []))
+    else:
+        favorite_titles = set(json_data.get("user_favorite_books", []))
+    
     favorite_genre_weights = defaultdict(float)
 
-    for row in movies_data:
-        title = row.get("title", "").strip()
+    for row in data:
+        title = row.get("title", row.get("Title", "")).strip()
         if title in favorite_titles:
-            genres_value = (row.get("genres") or "")
+            genres_value = (row.get("genres", row.get("categories", "")) or "")
             for genre in genres_value.split("|"):
                 favorite_genre_weights[genre.strip()] += 0.3  
-    # print(favorite_genre_weights)
-
 
     return favorite_genre_weights
 
-def get_movies_by_emotion(emotion: str, movies_data: list[dict], favorite_genre_weights: dict[str, float]) -> list[tuple[str, str, float]]:
-    genre_weights = emotion_to_genre_weight_mappings[emotion]
-    movies = []
+def get_recommendations_by_emotion(emotion: str, data: list[dict], 
+                                    favorite_genre_weights: dict[str, float],
+                                    is_movie: bool = True) -> list[tuple[str, str, float]]:
+    if is_movie:
+        genre_weights = emotion_to_genre_weight_mappings[emotion]
+        genre_col = "genres"
+        id_col = "movieId"
+        title_col = "title"
+    else:
+        genre_weights = emotion_to_category_weight_mappings[emotion]
+        genre_col = "categories"
+        id_col = "Title"
+        title_col = "Title"
+    
+    recommendations = []
 
-    for row in movies_data:
-        movieId = row.get("movieId", "").strip()
-        title = row.get("title", "Unknown Title").strip()
-        genres_value = (row.get("genres") or "").strip()
+    for row in data:
+        id_val = row.get(id_col, "").strip()
+        title = row.get(title_col, "Unknown Title").strip()
+        genres_value = (row.get(genre_col) or "").strip()
         rating_count = row.get("rating_count", 0)
         rating_mean = row.get("rating_mean", 0.0)
 
-        if not movieId or not genres_value:
+        if not id_val or not genres_value:
             continue
 
         total_weight = 0.0
@@ -153,31 +216,44 @@ def get_movies_by_emotion(emotion: str, movies_data: list[dict], favorite_genre_
 
         if total_weight > 0:
             final_score = get_final_score(total_weight, rating_count, rating_mean)
-            movies.append((movieId, title, final_score))
+            recommendations.append((id_val, title, final_score))
 
-    movies.sort(key=lambda x: x[2], reverse=True)
-    return movies
+    recommendations.sort(key=lambda x: x[2], reverse=True)
+    return recommendations
 
 
-def print_movies_by_emotion(emotion: str, movies_data: list[dict], favorite_genre_weights: dict[str, float]) -> None:
-	count = 0
-	movies = get_movies_by_emotion(emotion, movies_data, favorite_genre_weights)
-	print(f"Here are the top 3 movies for when you are feeling '{emotion}':")
-	for movieId, title, score in movies:
-		print(f"{title} (Score: {score:.2f})")
-		count += 1
-		if count >= 3:
-			break
+def print_recommendations_by_emotion(emotion: str, data: list[dict], 
+                                     favorite_genre_weights: dict[str, float],
+                                     is_movie: bool = True, count: int = 3) -> None:
+	media_type = "movies" if is_movie else "books"
+	recommendations = get_recommendations_by_emotion(emotion, data, favorite_genre_weights, is_movie)
+	print(f"\nHere are the top {count} {media_type} for when you are feeling '{emotion}':")
+	for idx, (id_val, title, score) in enumerate(recommendations[:count], 1):
+		print(f"{idx}. {title} (Score: {score:.2f})")
 
 # __main__
 
 # To accept lowercase emotion names
 emotion_lookup = {k.strip().lower(): k for k in emotion_to_genre_weight_mappings.keys()}
 
-path = find_dataset(DATASET)
-movies_data = load_and_parse_movies(path)
+# Ask user to choose between movies or books
+while True:
+    choice = input("Would you like recommendations for (m)ovies or (b)ooks? ").strip().lower()
+    if choice in ['m', 'movies']:
+        is_movie = True
+        path = find_dataset(DATASET)
+        data = load_and_parse_data(path)
+        user_favorites_path = USER_FAVORITES_MOVIES
+        break
+    elif choice in ['b', 'books']:
+        is_movie = False
+        path = find_dataset(BOOKS_DATASET)
+        data = load_and_parse_data(path)
+        user_favorites_path = USER_FAVORITES_BOOKS
+        break
+    print("Invalid choice. Please enter 'm' for movies or 'b' for books.")
 
-favorite_genre_weights = get_favorite_genre_weights(movies_data, USER_FAVORITES)
+favorite_genre_weights = get_favorite_genre_weights(data, user_favorites_path, is_movie)
 
 while True:
     choice = input(f"Enter an emotion (joy, sadness, fear, anger, despondent, excitement, curiosity, anxious): ").strip().lower()
@@ -186,4 +262,4 @@ while True:
         break
     print(f"Invalid emotion '{choice}'. Please try again.")
 
-print_movies_by_emotion(emotion_input, movies_data, favorite_genre_weights)
+print_recommendations_by_emotion(emotion_input, data, favorite_genre_weights, is_movie)
