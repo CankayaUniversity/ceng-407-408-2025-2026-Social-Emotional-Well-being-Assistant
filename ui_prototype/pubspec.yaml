@@ -19,7 +19,7 @@ dependencies:
     sdk: flutter
 
   # 🌐 HTTP (Node.js Backend API çağrıları)
-  http: ^1.2.2
+  http: ^1.2.1
 
   # 🔐 TOKEN saklamak için (JWT)
   shared_preferences: ^2.2.3
