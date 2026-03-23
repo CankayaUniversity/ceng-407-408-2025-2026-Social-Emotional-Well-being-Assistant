@@ -1,13 +1,12 @@
 const { io } = require("socket.io-client");
 const readline = require("readline");
 
-const DEFAULT_SERVER_URL = "https://sewa-community-chatroom-production.up.railway.app";
+const DEFAULT_SERVER_URL = "http://localhost:4000";
 
 const serverUrl =
     process.argv[2] ||
     process.env.SERVER_URL ||
-    DEFAULT_SERVER_URL ||
-    "http://localhost:3000";
+    DEFAULT_SERVER_URL;
 
 const socket = io(serverUrl);
 
@@ -17,6 +16,7 @@ const rl = readline.createInterface({
 });
 
 const username = `anon_${Math.floor(Math.random() * 10000)}`;
+const userId = Math.floor(Math.random() * 1000000) + 1;
 
 let currentRoom = null;
 
@@ -30,6 +30,7 @@ socket.on("connect", () => {
         socket.emit("join-room", {
             room,
             username,
+            userId,
         });
 
         console.log(`Joined room: ${room}`);
@@ -43,12 +44,11 @@ socket.on("system-message", (data) => {
 
 socket.on("new-message", (data) => {
     const room = data.room ?? currentRoom ?? "<room>";
-    const username = data.username ?? data.user ?? "<user>";
+    const sender = data.username ?? data.user ?? "<user>";
     const message = data.message ?? data.text ?? "";
-    console.log(`[${room}] ${username}: ${message}`);
+    console.log(`[${room}] ${sender}: ${message}`);
 });
 
-// Leave, exit or rejoin
 rl.on("line", (input) => {
     if (input === "/leave") {
         socket.emit("leave-room");
@@ -72,13 +72,13 @@ rl.on("line", (input) => {
         }
 
         currentRoom = room;
-        socket.emit("join-room", { room, username });
+        socket.emit("join-room", { room, username, userId });
         console.log(`Joined room: ${room}`);
         return;
     }
 
     if (!currentRoom) {
-        console.log("Not in a room. Use /join <room> (or /quit). ");
+        console.log("Not in a room. Use /join <room> (or /quit).");
         return;
     }
 
