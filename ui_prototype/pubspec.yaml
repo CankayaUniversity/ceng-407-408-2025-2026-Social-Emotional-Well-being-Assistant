@@ -8,46 +8,33 @@ environment:
   sdk: ">=3.9.0 <4.0.0"
 
 dependencies:
-  socket_io_client: ^2.0.3+1
   flutter:
     sdk: flutter
 
-
-
-  # 🌍 Localization (TR tarih, ay isimleri vs.)
   flutter_localizations:
     sdk: flutter
+  intl: ^0.20.2
 
-  # 🌐 HTTP (Node.js Backend API çağrıları)
-  http: ^1.2.1
-
-  # 🔐 TOKEN saklamak için (JWT)
+  http: ^1.2.2
   shared_preferences: ^2.2.3
 
-  # 🎨 UI
+  socket_io_client: ^3.0.2
+
   cupertino_icons: ^1.0.8
   image_picker: ^1.1.2
 
-  # 🤖 Gemini AI
   google_generative_ai: ^0.4.0
 
-  # 📅 Calendar & Date
   table_calendar: ^3.2.0
-  intl: ^0.20.2
 
-  # 📦 HIVE
-  # ⚠️ Artık Home verileri için DEĞİL
-  # (Sadece local UI/cache ihtiyaçları için kullanılabilir)
   hive: ^2.2.3
   hive_flutter: ^1.1.0
 
-  # 📞 SMS / arama / link açmak için (Crisis Help)
   url_launcher: ^6.3.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
   flutter_lints: ^5.0.0
 
 flutter:

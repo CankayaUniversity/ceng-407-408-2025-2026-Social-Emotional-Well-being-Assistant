@@ -8,11 +8,14 @@ import 'package:url_launcher/url_launcher.dart';
 import 'data/emergency_contact_store.dart';
 import 'ui/trusted_contacts_sheet.dart';
 
-// ✅ HomeStore (Hive user bazlı)
+// HomeStore
 import 'package:ui_prototype/features/home/data/home_store.dart';
 
-// ✅ Login’e dönmek için
+// Login’e dönmek için
 import 'package:ui_prototype/features/auth/login_screen.dart';
+
+// TokenStore clearAll için
+import 'package:ui_prototype/core/api/token_store.dart';
 
 // Mood store varsa:
 // import 'package:ui_prototype/features/mood/data/mood_store.dart';
@@ -26,11 +29,20 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  static const String _anonymousModeKey = 'anonymous_mode';
+  static const String _nicknameKey = 'user_nickname';
+  static const String _ageKey = 'profile_age';
+  static const String _cityKey = 'profile_city';
+  static const String _notesKey = 'profile_notes';
+  static const String _moodReminderKey = 'mood_reminder';
+  static const String _crisisNotificationsKey = 'crisis_notifications';
+
   File? _avatarFile;
 
   bool _anonymousMode = true;
   bool _moodReminder = true;
   bool _crisisNotifications = true;
+  bool _loadingPrefs = true;
 
   late String _realName;
 
@@ -42,11 +54,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-
     _realName = widget.loginUsername;
-    _applyNicknameByMode();
+    _initProfile();
+  }
 
+  Future<void> _initProfile() async {
+    await _loadProfilePrefs();
     _loadContacts();
+  }
+
+  Future<void> _loadProfilePrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final anonymousMode = prefs.getBool(_anonymousModeKey) ?? true;
+    final savedNickname = (prefs.getString(_nicknameKey) ?? '').trim();
+    final savedAge = prefs.getString(_ageKey) ?? '';
+    final savedCity = prefs.getString(_cityKey) ?? '';
+    final savedNotes = prefs.getString(_notesKey) ?? '';
+    final moodReminder = prefs.getBool(_moodReminderKey) ?? true;
+    final crisisNotifications =
+        prefs.getBool(_crisisNotificationsKey) ?? true;
+
+    _anonymousMode = anonymousMode;
+    _moodReminder = moodReminder;
+    _crisisNotifications = crisisNotifications;
+
+    _nicknameController.text = savedNickname.isNotEmpty
+        ? savedNickname
+        : (_anonymousMode ? 'Anonymous' : _realName);
+
+    _ageController.text = savedAge;
+    _cityController.text = savedCity;
+    _notesController.text = savedNotes;
+
+    if (mounted) {
+      setState(() {
+        _loadingPrefs = false;
+      });
+    }
   }
 
   Future<void> _loadContacts() async {
@@ -70,14 +115,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
-  void _applyNicknameByMode() {
-    _nicknameController.text = _anonymousMode ? "Anonymous" : _realName;
-    if (mounted) setState(() {});
+  Future<void> _saveAnonymousMode(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_anonymousModeKey, value);
   }
 
-  void _toggleAnonymous(bool v) {
-    setState(() => _anonymousMode = v);
-    _applyNicknameByMode();
+  Future<void> _saveNickname(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_nicknameKey, value.trim());
+  }
+
+  Future<void> _saveAge(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_ageKey, value.trim());
+  }
+
+  Future<void> _saveCity(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_cityKey, value.trim());
+  }
+
+  Future<void> _saveNotes(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_notesKey, value.trim());
+  }
+
+  Future<void> _saveMoodReminder(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_moodReminderKey, value);
+  }
+
+  Future<void> _saveCrisisNotifications(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_crisisNotificationsKey, value);
+  }
+
+  Future<void> _toggleAnonymous(bool value) async {
+    setState(() {
+      _anonymousMode = value;
+    });
+
+    await _saveAnonymousMode(value);
+
+    if (value) {
+      final current = _nicknameController.text.trim();
+      if (current.isEmpty || current == _realName) {
+        _nicknameController.text = 'Anonymous';
+        await _saveNickname('Anonymous');
+      } else {
+        await _saveNickname(current);
+      }
+    } else {
+      // Anonymous kapalıysa gerçek isim göster
+      _nicknameController.text = _realName;
+      await _saveNickname(_realName);
+    }
+
+    if (mounted) setState(() {});
   }
 
   Future<void> _pickAvatar() async {
@@ -125,15 +219,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  /// ✅ Logout: token sil + store reset + login’e dön
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove("auth_token");
+
+    await TokenStore.clearAll();
+
     await prefs.remove("user_email");
     await prefs.remove("user_name");
     await prefs.remove("user_id");
 
-    // ✅ Store reset (doğru fonksiyonlar)
     HomeStore.instance.reset();
     EmergencyContactStore.instance.reset();
     // MoodStore varsa:
@@ -149,6 +243,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_loadingPrefs) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final avatar = _avatarFile == null
         ? const CircleAvatar(radius: 28, child: Icon(Icons.person))
         : CircleAvatar(radius: 28, backgroundImage: FileImage(_avatarFile!));
@@ -171,7 +271,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Row(
@@ -186,8 +288,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           onTap: _pickAvatar,
                           child: CircleAvatar(
                             radius: 12,
-                            backgroundColor: Theme.of(context).colorScheme.primary,
-                            child: const Icon(Icons.edit, size: 14, color: Colors.white),
+                            backgroundColor:
+                            Theme.of(context).colorScheme.primary,
+                            child: const Icon(
+                              Icons.edit,
+                              size: 14,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
@@ -200,23 +307,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         const Text(
                           "Nickname",
-                          style: TextStyle(fontWeight: FontWeight.w700, color: Colors.black54),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black54,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         TextField(
                           controller: _nicknameController,
-                          enabled: !_anonymousMode,
-                          decoration: const InputDecoration(
+                          enabled: _anonymousMode,
+                          onChanged: (value) async {
+                            if (_anonymousMode) {
+                              await _saveNickname(value);
+                            }
+                          },
+                          decoration: InputDecoration(
                             isDense: true,
-                            border: OutlineInputBorder(),
+                            border: const OutlineInputBorder(),
+                            hintText: _anonymousMode
+                                ? 'Anonymous veya takma ad yaz'
+                                : _realName,
                           ),
                         ),
                         const SizedBox(height: 6),
                         Text(
                           _anonymousMode
-                              ? "Anonymous mode is ON (locked)"
-                              : "Anonymous mode is OFF",
-                          style: const TextStyle(fontSize: 12, color: Colors.black54),
+                              ? "Anonymous mode is ON"
+                              : "Anonymous mode is OFF (real identity visible)",
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.black54,
+                          ),
                         ),
                       ],
                     ),
@@ -225,24 +346,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ),
-
           const SizedBox(height: 16),
           _sectionTitle("User Information"),
-          _textFieldCard("Age", _ageController),
-          _textFieldCard("City", _cityController),
-          _textFieldCard("Notes / Interests (from chat)", _notesController, maxLines: 4),
-
+          _textFieldCard(
+            "Age",
+            _ageController,
+            onChanged: _saveAge,
+          ),
+          _textFieldCard(
+            "City",
+            _cityController,
+            onChanged: _saveCity,
+          ),
+          _textFieldCard(
+            "Notes / Interests (from chat)",
+            _notesController,
+            maxLines: 4,
+            onChanged: _saveNotes,
+          ),
           const SizedBox(height: 16),
           _sectionTitle("Privacy & Safety"),
-
           _switchTile(
             title: "Anonymous mode",
             subtitle: "Hide real name in chats",
             value: _anonymousMode,
-            onChanged: _toggleAnonymous,
+            onChanged: (v) async {
+              await _toggleAnonymous(v);
+            },
             icon: Icons.visibility_off,
           ),
-
           Card(
             child: ListTile(
               leading: const Icon(Icons.health_and_safety),
@@ -271,23 +403,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: _openTrustedContactsManager,
             ),
           ),
-
           const SizedBox(height: 16),
           _sectionTitle("Notifications"),
-
           _switchTile(
             title: "Daily mood reminder",
             subtitle: "Remind me to log mood daily",
             value: _moodReminder,
-            onChanged: (v) => setState(() => _moodReminder = v),
+            onChanged: (v) async {
+              setState(() => _moodReminder = v);
+              await _saveMoodReminder(v);
+            },
             icon: Icons.notifications_active,
           ),
-
           _switchTile(
             title: "Crisis notifications",
             subtitle: "Show safety prompts when mood is low (mock)",
             value: _crisisNotifications,
-            onChanged: (v) => setState(() => _crisisNotifications = v),
+            onChanged: (v) async {
+              setState(() => _crisisNotifications = v);
+              await _saveCrisisNotifications(v);
+            },
             icon: Icons.warning_amber_rounded,
           ),
         ],
@@ -302,13 +437,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _textFieldCard(String label, TextEditingController c, {int maxLines = 1}) {
+  Widget _textFieldCard(
+      String label,
+      TextEditingController c, {
+        int maxLines = 1,
+        ValueChanged<String>? onChanged,
+      }) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: TextField(
           controller: c,
           maxLines: maxLines,
+          onChanged: onChanged,
           decoration: InputDecoration(
             labelText: label,
             border: const OutlineInputBorder(),
