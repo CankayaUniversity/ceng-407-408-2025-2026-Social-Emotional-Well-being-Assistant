@@ -2,7 +2,8 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 
-const apiRoutes = require("../routes"); // routes/index.js
+const prisma = require("./prisma");
+const apiRoutes = require("../routes");
 
 const app = express();
 
@@ -29,6 +30,29 @@ app.get("/health", (req, res) => {
 ======================= */
 
 app.use("/api", apiRoutes);
+
+/* =======================
+   Community cleanup job
+======================= */
+setInterval(async () => {
+  try {
+    const cutoffDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const result = await prisma.communityMessage.deleteMany({
+      where: {
+        createdAt: {
+          lt: cutoffDate,
+        },
+      },
+    });
+
+    if (result.count > 0) {
+      console.log(`🧹 Deleted ${result.count} old community messages`);
+    }
+  } catch (error) {
+    console.error("cleanup job error:", error.message);
+  }
+}, 10 * 60 * 1000);
 
 /* =======================
    404 fallback
