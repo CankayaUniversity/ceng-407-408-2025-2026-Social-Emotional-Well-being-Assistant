@@ -71,9 +71,11 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
   Future<Map<String, dynamic>?> _getRecommendations(
       String emotion, String mediaType) async {
-    // Recommendation API endpoint
-    const apiUrl = 'http://127.0.0.1:5000/recommend';
+    const apiUrl = 'http://10.0.2.2:5000/recommend';
     try {
+      print('[DEBUG] Calling recommendation API: $apiUrl');
+      print('[DEBUG] Emotion: $emotion, Media Type: $mediaType');
+      
       final response = await http.post(
         Uri.parse(apiUrl),
         headers: {'Content-Type': 'application/json'},
@@ -84,11 +86,16 @@ class _AiChatScreenState extends State<AiChatScreen> {
         }),
       );
 
+      print('[DEBUG] API Response Status: ${response.statusCode}');
+      print('[DEBUG] API Response Body: ${response.body}');
+
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
+      } else {
+        print('[ERROR] API returned status ${response.statusCode}: ${response.body}');
       }
     } catch (e) {
-      print('Error getting recommendations: $e');
+      print('[ERROR] Error getting recommendations: $e');
     }
     return null;
   }
