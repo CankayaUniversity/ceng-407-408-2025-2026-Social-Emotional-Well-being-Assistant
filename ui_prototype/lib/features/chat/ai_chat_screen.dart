@@ -160,6 +160,22 @@ class _AiChatScreenState extends State<AiChatScreen> {
     return false;
   }
 
+  bool _isAskingForBooks(String text) {
+    final lowerText = text.toLowerCase();
+    final bookKeywords = [
+      'book', 'kitap', 'read', 'oku', 'novel', 'author', 'yazar'
+    ];
+    return bookKeywords.any((keyword) => lowerText.contains(keyword));
+  }
+
+  bool _isAskingForMovies(String text) {
+    final lowerText = text.toLowerCase();
+    final movieKeywords = [
+      'movie', 'film', 'watch', 'izle', 'tv', 'show', 'serie'
+    ];
+    return movieKeywords.any((keyword) => lowerText.contains(keyword));
+  }
+
   void _sendMessage() async {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
@@ -181,48 +197,56 @@ class _AiChatScreenState extends State<AiChatScreen> {
       final askingForRecommendations = _isAskingForRecommendations(text);
       print('[DEBUG] User asking for recommendations: $askingForRecommendations');
       
+      final askingForBooks = _isAskingForBooks(text);
+      final askingForMovies = _isAskingForMovies(text);
+      print('[DEBUG] Asking for books: $askingForBooks, Asking for movies: $askingForMovies');
+      
       Map<String, dynamic>? bookRecs;
       Map<String, dynamic>? movieRecs;
 
       if (emotion != null && askingForRecommendations) {
         print('[DEBUG] Fetching recommendations for emotion: $emotion');
         
-        // Get book recommendations
-        print('[DEBUG] Calling API for books...');
-        bookRecs = await _getRecommendations(emotion, 'books');
-        print('[DEBUG] Book recommendations response: $bookRecs');
-        
-        if (bookRecs != null && bookRecs['recommendations'].isNotEmpty) {
-          print('[DEBUG] Got ${bookRecs['recommendations'].length} books');
-          recommendationContext +=
-              '\n\nRecommended books for ${emotion} emotion:\n';
-          for (int i = 0; i < bookRecs['recommendations'].length; i++) {
-            final book = bookRecs['recommendations'][i];
-            print('[DEBUG] Book $i: ${book['title']}');
+        // Get book recommendations only if asking for books (or neither book/movie specified)
+        if (askingForBooks || (!askingForBooks && !askingForMovies)) {
+          print('[DEBUG] Calling API for books...');
+          bookRecs = await _getRecommendations(emotion, 'books');
+          print('[DEBUG] Book recommendations response: $bookRecs');
+          
+          if (bookRecs != null && bookRecs['recommendations'].isNotEmpty) {
+            print('[DEBUG] Got ${bookRecs['recommendations'].length} books');
             recommendationContext +=
-                '${i + 1}. ${book['title']} (Score: ${book['score'].toStringAsFixed(2)})\n';
+                '\n\nRecommended books for ${emotion} emotion:\n';
+            for (int i = 0; i < bookRecs['recommendations'].length; i++) {
+              final book = bookRecs['recommendations'][i];
+              print('[DEBUG] Book $i: ${book['title']}');
+              recommendationContext +=
+                  '${i + 1}. ${book['title']} (Score: ${book['score'].toStringAsFixed(2)})\n';
+            }
+          } else {
+            print('[DEBUG] No book recommendations returned');
           }
-        } else {
-          print('[DEBUG] No book recommendations returned');
         }
 
-        // Get movie recommendations
-        print('[DEBUG] Calling API for movies...');
-        movieRecs = await _getRecommendations(emotion, 'movies');
-        print('[DEBUG] Movie recommendations response: $movieRecs');
-        
-        if (movieRecs != null && movieRecs['recommendations'].isNotEmpty) {
-          print('[DEBUG] Got ${movieRecs['recommendations'].length} movies');
-          recommendationContext +=
-              '\n\nRecommended movies for ${emotion} emotion:\n';
-          for (int i = 0; i < movieRecs['recommendations'].length; i++) {
-            final movie = movieRecs['recommendations'][i];
-            print('[DEBUG] Movie $i: ${movie['title']}');
+        // Get movie recommendations only if asking for movies
+        if (askingForMovies) {
+          print('[DEBUG] Calling API for movies...');
+          movieRecs = await _getRecommendations(emotion, 'movies');
+          print('[DEBUG] Movie recommendations response: $movieRecs');
+          
+          if (movieRecs != null && movieRecs['recommendations'].isNotEmpty) {
+            print('[DEBUG] Got ${movieRecs['recommendations'].length} movies');
             recommendationContext +=
-                '${i + 1}. ${movie['title']} (Score: ${movie['score'].toStringAsFixed(2)})\n';
+                '\n\nRecommended movies for ${emotion} emotion:\n';
+            for (int i = 0; i < movieRecs['recommendations'].length; i++) {
+              final movie = movieRecs['recommendations'][i];
+              print('[DEBUG] Movie $i: ${movie['title']}');
+              recommendationContext +=
+                  '${i + 1}. ${movie['title']} (Score: ${movie['score'].toStringAsFixed(2)})\n';
+            }
+          } else {
+            print('[DEBUG] No movie recommendations returned');
           }
-        } else {
-          print('[DEBUG] No movie recommendations returned');
         }
       }
 
