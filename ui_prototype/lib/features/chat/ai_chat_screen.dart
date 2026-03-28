@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import '../../core/api/gemini_service.dart';
 import '../../core/config/app_config.dart';
 
@@ -48,6 +50,34 @@ class _AiChatScreenState extends State<AiChatScreen> {
     }
   }
 
+  Future<void> _saveEmotionToJson(String text, String? emotion) async {
+    if (emotion == null) return;
+
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/emotions.json');
+
+      List<Map<String, dynamic>> emotionsList = [];
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        if (content.isNotEmpty) {
+          emotionsList = List<Map<String, dynamic>>.from(jsonDecode(content));
+        }
+      }
+
+      emotionsList.add({
+        'text': text,
+        'emotion': emotion,
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+
+      await file.writeAsString(jsonEncode(emotionsList));
+      print('[DEBUG] Emotion saved to ${file.path}');
+    } catch (e) {
+      print('[ERROR] Failed to save emotion to JSON: $e');
+    }
+  }
+
   Future<String?> _getEmotion(String text) async {
     // For Android emulator, use 'http://10.0.2.2:8000/analyze_emotion'
     const apiUrl = 'http://127.0.0.1:8000/analyze_emotion';
@@ -75,7 +105,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
     try {
       print('[DEBUG] Calling recommendation API: $apiUrl');
       print('[DEBUG] Emotion: $emotion, Media Type: $mediaType');
-      
+
       final response = await http.post(
         Uri.parse(apiUrl),
         headers: {'Content-Type': 'application/json'},
@@ -104,7 +134,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
     final lowerText = text.toLowerCase();
     print('[DEBUG] Checking recommendations for text: "$text"');
     print('[DEBUG] Lowercase text: "$lowerText"');
-    
+
     // English keywords
     final englishKeywords = [
       'recommend',
@@ -121,23 +151,23 @@ class _AiChatScreenState extends State<AiChatScreen> {
       'find me',
       'give me',
     ];
-    
+
     // Turkish keywords
     final turkishKeywords = [
-      'öner',         
-      'tavsiye',       
-      'kitap',        
-      'film',     
-      'ne izle',       
-      'ne okuya',    
-      'ne okusa',     
-      'hangi kitap',   
-      'hangi film', 
-      'bana bir',      
-      'bulabilir',      
-      'bulabilir misin', 
-      'yapabilir misin', 
-      'yardım et',     
+      'öner',
+      'tavsiye',
+      'kitap',
+      'film',
+      'ne izle',
+      'ne okuya',
+      'ne okusa',
+      'hangi kitap',
+      'hangi film',
+      'bana bir',
+      'bulabilir',
+      'bulabilir misin',
+      'yapabilir misin',
+      'yardım et',
     ];
 
     // Check English keywords
@@ -147,7 +177,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
         return true;
       }
     }
-    
+
     // Check Turkish keywords
     for (var keyword in turkishKeywords) {
       if (lowerText.contains(keyword)) {
@@ -155,7 +185,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
         return true;
       }
     }
-    
+
     print('[DEBUG] No recommendation keywords found');
     return false;
   }
@@ -189,39 +219,42 @@ class _AiChatScreenState extends State<AiChatScreen> {
     try {
       // 1. Get emotion from NLP API
       print('Sending to NLP API: "$text"');
-      final emotion = "anger"; // Hardcoded for testing for now
+      final emotion = await _getEmotion(text);
       print('Detected emotion: ${emotion ?? "None"}');
+
+      // Save the detected emotion to a JSON file
+      await _saveEmotionToJson(text, emotion);
 
       // 2. Check if user is asking for recommendations
       String recommendationContext = '';
       final askingForRecommendations = _isAskingForRecommendations(text);
       print('[DEBUG] User asking for recommendations: $askingForRecommendations');
-      
+
       final askingForBooks = _isAskingForBooks(text);
       final askingForMovies = _isAskingForMovies(text);
       print('[DEBUG] Asking for books: $askingForBooks, Asking for movies: $askingForMovies');
-      
+
       Map<String, dynamic>? bookRecs;
       Map<String, dynamic>? movieRecs;
 
       if (emotion != null && askingForRecommendations) {
         print('[DEBUG] Fetching recommendations for emotion: $emotion');
-        
+
         // Get book recommendations only if asking for books (or neither book/movie specified)
         if (askingForBooks || (!askingForBooks && !askingForMovies)) {
           print('[DEBUG] Calling API for books...');
           bookRecs = await _getRecommendations(emotion, 'books');
           print('[DEBUG] Book recommendations response: $bookRecs');
-          
+
           if (bookRecs != null && bookRecs['recommendations'].isNotEmpty) {
             print('[DEBUG] Got ${bookRecs['recommendations'].length} books');
             recommendationContext +=
-                '\n\nRecommended books for ${emotion} emotion:\n';
+            '\n\nRecommended books for ${emotion} emotion:\n';
             for (int i = 0; i < bookRecs['recommendations'].length; i++) {
               final book = bookRecs['recommendations'][i];
               print('[DEBUG] Book $i: ${book['title']}');
               recommendationContext +=
-                  '${i + 1}. ${book['title']} (Score: ${book['score'].toStringAsFixed(2)})\n';
+              '${i + 1}. ${book['title']} (Score: ${book['score'].toStringAsFixed(2)})\n';
             }
           } else {
             print('[DEBUG] No book recommendations returned');
@@ -233,16 +266,16 @@ class _AiChatScreenState extends State<AiChatScreen> {
           print('[DEBUG] Calling API for movies...');
           movieRecs = await _getRecommendations(emotion, 'movies');
           print('[DEBUG] Movie recommendations response: $movieRecs');
-          
+
           if (movieRecs != null && movieRecs['recommendations'].isNotEmpty) {
             print('[DEBUG] Got ${movieRecs['recommendations'].length} movies');
             recommendationContext +=
-                '\n\nRecommended movies for ${emotion} emotion:\n';
+            '\n\nRecommended movies for ${emotion} emotion:\n';
             for (int i = 0; i < movieRecs['recommendations'].length; i++) {
               final movie = movieRecs['recommendations'][i];
               print('[DEBUG] Movie $i: ${movie['title']}');
               recommendationContext +=
-                  '${i + 1}. ${movie['title']} (Score: ${movie['score'].toStringAsFixed(2)})\n';
+              '${i + 1}. ${movie['title']} (Score: ${movie['score'].toStringAsFixed(2)})\n';
             }
           } else {
             print('[DEBUG] No movie recommendations returned');
@@ -365,12 +398,12 @@ class _AiChatScreenState extends State<AiChatScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 ...msg.bookRecommendations.asMap().entries.map(
-                                  (entry) {
+                                      (entry) {
                                     final idx = entry.key;
                                     final book = entry.value;
                                     return Padding(
                                       padding:
-                                          const EdgeInsets.symmetric(vertical: 4),
+                                      const EdgeInsets.symmetric(vertical: 4),
                                       child: Text(
                                         '${idx + 1}. ${book['title']}',
                                         style: const TextStyle(fontSize: 12),
@@ -403,12 +436,12 @@ class _AiChatScreenState extends State<AiChatScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 ...msg.movieRecommendations.asMap().entries.map(
-                                  (entry) {
+                                      (entry) {
                                     final idx = entry.key;
                                     final movie = entry.value;
                                     return Padding(
                                       padding:
-                                          const EdgeInsets.symmetric(vertical: 4),
+                                      const EdgeInsets.symmetric(vertical: 4),
                                       child: Text(
                                         '${idx + 1}. ${movie['title']}',
                                         style: const TextStyle(fontSize: 12),
@@ -466,10 +499,10 @@ class _Message {
   final List<dynamic> movieRecommendations;
 
   _Message(
-    this.text,
-    this.isUser, {
-    this.emotion,
-    this.bookRecommendations = const [],
-    this.movieRecommendations = const [],
-  });
+      this.text,
+      this.isUser, {
+        this.emotion,
+        this.bookRecommendations = const [],
+        this.movieRecommendations = const [],
+      });
 }
