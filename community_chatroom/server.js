@@ -13,7 +13,7 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 4000;
-const BACKEND_URL = "http://localhost:3001";
+const BACKEND_URL = "https://backend-production-66b91.up.railway.app";
 
 app.get("/health", (req, res) => {
   res.status(200).json({ ok: true });
