@@ -79,8 +79,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
   }
 
   Future<String?> _getEmotion(String text) async {
-    // For Android emulator, use 'http://10.0.2.2:8000/analyze_emotion'
-    const apiUrl = 'http://127.0.0.1:8000/analyze_emotion';
+    const apiUrl = 'http://10.0.2.2:8000/analyze-emotion';
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
