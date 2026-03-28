@@ -35,11 +35,11 @@ async function register(req, res) {
       return res.status(409).json({ message: "Bu email zaten kayıtlı" });
     }
 
-    const passwordHash = await hashPassword(String(password));
+    const password_hash = await hashPassword(String(password));
 
     const user = await authService.createUser({
       email: normalizedEmail,
-      passwordHash,
+      password_hash,
       name: normalizedName,
     });
 
@@ -72,7 +72,7 @@ async function login(req, res) {
       return res.status(401).json({ message: "Email veya şifre yanlış" });
     }
 
-    const ok = await comparePassword(String(password), user.passwordHash);
+    const ok = await comparePassword(String(password), user.password_hash);
     if (!ok) {
       return res.status(401).json({ message: "Email veya şifre yanlış" });
     }
