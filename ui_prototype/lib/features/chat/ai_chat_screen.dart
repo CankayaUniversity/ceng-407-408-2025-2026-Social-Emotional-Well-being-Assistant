@@ -58,8 +58,9 @@ class _AiChatScreenState extends State<AiChatScreen> {
       final file = File('${directory.path}/emotions.json');
 
       List<Map<String, dynamic>> emotionsList = [];
+      String content = "empty";
       if (await file.exists()) {
-        final content = await file.readAsString();
+        content = await file.readAsString();
         if (content.isNotEmpty) {
           emotionsList = List<Map<String, dynamic>>.from(jsonDecode(content));
         }
@@ -71,8 +72,14 @@ class _AiChatScreenState extends State<AiChatScreen> {
         'timestamp': DateTime.now().toIso8601String(),
       });
 
+      // Keep only the last 10 emotions
+      if (emotionsList.length > 10) {
+        emotionsList = emotionsList.sublist(emotionsList.length - 10);
+      }
+
       await file.writeAsString(jsonEncode(emotionsList));
       print('[DEBUG] Emotion saved to ${file.path}');
+      print(content);
     } catch (e) {
       print('[ERROR] Failed to save emotion to JSON: $e');
     }
