@@ -96,7 +96,7 @@ Rules:
   }
 
   Future<String?> _getEmotion(String text) async {
-    const apiUrl = 'http://10.0.2.2:8000/analyze-emotion';
+    const apiUrl = 'https://emotion-analysis-production.up.railway.app/analyze-emotion';
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
