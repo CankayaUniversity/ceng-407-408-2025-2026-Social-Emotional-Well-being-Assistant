@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import torch
@@ -7,7 +8,8 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 # --------------------------------------------------
 # Sabitler
 # --------------------------------------------------
-MODEL_PATH = "emotion_tr_bert"
+MODEL_SOURCE = os.getenv("MODEL_SOURCE", "emotion_tr_bert")
+HF_TOKEN = os.getenv("HF_TOKEN")
 
 # Duygu → Risk seviyesi eşlemesi
 RISK_MAP = {
@@ -29,11 +31,11 @@ RISK_MAP = {
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 try:
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
-    model = AutoModelForSequenceClassification.from_pretrained(MODEL_PATH)
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_SOURCE, token=HF_TOKEN)
+    model = AutoModelForSequenceClassification.from_pretrained(MODEL_SOURCE, token=HF_TOKEN)
     model.to(device)
     model.eval()
-    print(f"Model '{MODEL_PATH}' başarıyla yüklendi. Cihaz: {device}")
+    print(f"Model '{MODEL_SOURCE}' başarıyla yüklendi. Cihaz: {device}")
 except Exception as load_err:
     tokenizer = None
     model = None
@@ -125,4 +127,5 @@ async def analyze_emotion(request: EmotionRequest):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000, reload=False)
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port, reload=False)
