@@ -14,8 +14,8 @@ class CommunityRoomsScreen extends StatefulWidget {
 }
 
 class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
-  static const String backendBaseUrl = 'http://10.0.2.2:3001';
-  static const String socketBaseUrl = 'http://10.0.2.2:4000';
+  static const String backendBaseUrl = 'https://backend-production-66b91.up.railway.app';
+  static const String socketBaseUrl = 'https://sewa-community-chatroom-production.up.railway.app';
 
   // Profil ekranında kullandığın key'ler farklıysa sadece bunları değiştir.
   static const String _anonymousModeKey = 'anonymous_mode';

@@ -28,6 +28,16 @@ class _AiChatScreenState extends State<AiChatScreen> {
     _initializeGemini();
   }
 
+  static const String _systemPrompt = '''
+You are a supportive wellbeing assistant.
+Rules:
+1. Be calm, empathetic, and concise.
+2. Do not provide medical diagnosis.
+3. If the user looks in crisis, suggest contacting local emergency support.
+4. If recommendations are provided in context, use only those titles and do not invent items.
+5. Reply in the user's language when possible.
+''';
+
   void _initializeGemini() {
     try {
       AppConfig.validateGeminiKey();
@@ -41,7 +51,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
         return;
       }
 
-      _geminiService = GeminiService(apiKey: AppConfig.geminiApiKey);
+      _geminiService = GeminiService(apiKey: AppConfig.geminiApiKey, systemPrompt: _systemPrompt);
       _chatSession = _geminiService.startChatSession();
     } catch (e) {
       setState(() {

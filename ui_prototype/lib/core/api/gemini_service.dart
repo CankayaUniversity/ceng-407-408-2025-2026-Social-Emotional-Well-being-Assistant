@@ -4,11 +4,32 @@ import '../config/app_config.dart';
 class GeminiService {
   late final GenerativeModel _model;
 
-  GeminiService({required String apiKey}) {
-    _model = GenerativeModel(
-      model: AppConfig.geminiModel,
-      apiKey: apiKey,
-    );
+  GeminiService({
+    required String apiKey,
+    String? systemPrompt,
+  }) {
+    if (systemPrompt != null && systemPrompt.trim().isNotEmpty) {
+      _model = GenerativeModel(
+        model: AppConfig.geminiModel,
+        apiKey: apiKey,
+        systemInstruction: Content.text(systemPrompt),
+        generationConfig: GenerationConfig(
+          temperature:0.5,
+          topP:0.9,
+          maxOutputTokens:700,
+        ),
+      );
+    } else {
+      _model = GenerativeModel(
+        model: AppConfig.geminiModel,
+        apiKey: apiKey,
+        generationConfig: GenerationConfig(
+          temperature:0.5,
+          topP:0.9,
+          maxOutputTokens:700,
+        ),
+      );
+    }
   }
 
   /// Send a message to Gemini and get a response
