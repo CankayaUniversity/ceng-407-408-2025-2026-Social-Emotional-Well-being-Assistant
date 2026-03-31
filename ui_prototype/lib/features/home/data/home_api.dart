@@ -1,5 +1,5 @@
 import 'dart:convert';
-import '../../core/api/api_client.dart';
+import '../../../core/api/api_client.dart';
 
 class HomeApi {
   static Future<List<String>> getSelectedTabs() async {
