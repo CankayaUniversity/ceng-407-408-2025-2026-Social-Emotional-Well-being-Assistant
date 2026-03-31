@@ -10,8 +10,65 @@ from tag_matching import (
     load_and_parse_data,
 )
 from pathlib import Path
+import os
+import unicodedata
 
 app = Flask(__name__)
+
+
+CANONICAL_EMOTIONS = [
+    "joy",
+    "sadness",
+    "fear",
+    "anger",
+    "despondent",
+    "excitement",
+    "curiosity",
+    "anxious",
+]
+
+
+def normalize_text(value: str) -> str:
+    """Normalize text for resilient matching across Turkish/English variants."""
+    folded = (value or "").strip().casefold()
+    decomposed = unicodedata.normalize("NFKD", folded)
+    return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+
+
+# Maps external API emotions (Turkish + common English aliases) to internal emotions.
+EMOTION_ALIASES = {
+    # Turkish inputs from the other API
+    "mutluluk": "joy",
+    "arzu": "excitement",
+    "notr": "curiosity",
+    "korku": "fear",
+    "saskinlik": "curiosity",
+    "kafa karisikligi": "anxious",
+    "ofke": "anger",
+    "uzuntu": "sadness",
+    "igrenme": "anxious",
+    "tiksinme": "anxious",
+    # English internal labels
+    "joy": "joy",
+    "sadness": "sadness",
+    "fear": "fear",
+    "anger": "anger",
+    "despondent": "despondent",
+    "excitement": "excitement",
+    "curiosity": "curiosity",
+    "anxious": "anxious",
+    # Common English aliases
+    "neutral": "curiosity",
+    "confusion": "anxious",
+    "disgust": "anxious",
+    "surprise": "curiosity",
+    "happiness": "joy",
+}
+
+
+def map_emotion_to_internal(raw_emotion: str) -> str | None:
+    normalized = normalize_text(raw_emotion)
+    return EMOTION_ALIASES.get(normalized)
 
 # Load both datasets at startup
 print("\n" + "="*60)
@@ -71,30 +128,40 @@ def get_recommendations():
         data = request.get_json()
         print(f"[DEBUG] Received request: {data}")
         
-        emotion = data.get("emotion", "").strip().lower()
+        if not isinstance(data, dict):
+            return jsonify({"error": "Request body must be valid JSON object"}), 400
+
+        raw_emotion = str(data.get("emotion", ""))
+        emotion = map_emotion_to_internal(raw_emotion)
         media_type = data.get("media_type", "books").strip().lower()
         count = data.get("count", 3)
         
-        print(f"[DEBUG] Parsed emotion: '{emotion}'")
+        print(f"[DEBUG] Raw emotion: '{raw_emotion}'")
+        print(f"[DEBUG] Mapped emotion: '{emotion}'")
         print(f"[DEBUG] Parsed media_type: '{media_type}'")
         print(f"[DEBUG] Count: {count}")
 
-        # Normalize emotion names
-        valid_emotions = [
-            "joy",
-            "sadness",
-            "fear",
-            "anger",
-            "despondent",
-            "excitement",
-            "curiosity",
-            "anxious",
-        ]
-        
-        if emotion not in valid_emotions:
-            print(f"[ERROR] Invalid emotion: {emotion}")
+        if emotion not in CANONICAL_EMOTIONS:
+            print(f"[ERROR] Invalid emotion: {raw_emotion}")
             return (
-                jsonify({"error": f"Invalid emotion. Valid emotions: {valid_emotions}"}),
+                jsonify(
+                    {
+                        "error": "Invalid emotion.",
+                        "accepted_turkish": [
+                            "Mutluluk",
+                            "Arzu",
+                            "Nötr",
+                            "Korku",
+                            "Şaşkınlık",
+                            "Kafa Karışıklığı",
+                            "Öfke",
+                            "Üzüntü",
+                            "İğrenme",
+                            "Tiksinme",
+                        ],
+                        "accepted_internal": CANONICAL_EMOTIONS,
+                    }
+                ),
                 400,
             )
 
@@ -135,7 +202,8 @@ def get_recommendations():
             print(f"  {i}. {rec['title']} (Score: {rec['score']:.2f})")
 
         response_data = {
-            "emotion": emotion,
+            "emotion": raw_emotion,
+            "normalized_emotion": emotion,
             "media_type": media_type,
             "recommendations": result,
             "count": len(result),
@@ -160,8 +228,10 @@ def health_check():
 
 
 if __name__ == "__main__":
-    print("Starting recommendation API on http://127.0.0.1:5000")
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "5000"))
+    print(f"Starting recommendation API on http://{host}:{port}")
     print("Available endpoints:")
     print("  POST /recommend - Get recommendations")
     print("  GET /health - Health check")
-    app.run(debug=False, host='127.0.0.1', port=5000, use_reloader=False)
+    app.run(debug=False, host=host, port=port, use_reloader=False)

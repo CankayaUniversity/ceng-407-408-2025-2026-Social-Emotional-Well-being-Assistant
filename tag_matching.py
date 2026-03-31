@@ -231,35 +231,38 @@ def print_recommendations_by_emotion(emotion: str, data: list[dict],
 	for idx, (id_val, title, score) in enumerate(recommendations[:count], 1):
 		print(f"{idx}. {title} (Score: {score:.2f})")
 
-# __main__
+def run_cli() -> None:
+    # To accept lowercase emotion names
+    emotion_lookup = {k.strip().lower(): k for k in emotion_to_genre_weight_mappings.keys()}
 
-# To accept lowercase emotion names
-emotion_lookup = {k.strip().lower(): k for k in emotion_to_genre_weight_mappings.keys()}
+    # Ask user to choose between movies or books
+    while True:
+        choice = input("Would you like recommendations for (m)ovies or (b)ooks? ").strip().lower()
+        if choice in ["m", "movies"]:
+            is_movie = True
+            path = find_dataset(DATASET)
+            data = load_and_parse_data(path)
+            user_favorites_path = USER_FAVORITES_MOVIES
+            break
+        if choice in ["b", "books"]:
+            is_movie = False
+            path = find_dataset(BOOKS_DATASET)
+            data = load_and_parse_data(path)
+            user_favorites_path = USER_FAVORITES_BOOKS
+            break
+        print("Invalid choice. Please enter 'm' for movies or 'b' for books.")
 
-# Ask user to choose between movies or books
-while True:
-    choice = input("Would you like recommendations for (m)ovies or (b)ooks? ").strip().lower()
-    if choice in ['m', 'movies']:
-        is_movie = True
-        path = find_dataset(DATASET)
-        data = load_and_parse_data(path)
-        user_favorites_path = USER_FAVORITES_MOVIES
-        break
-    elif choice in ['b', 'books']:
-        is_movie = False
-        path = find_dataset(BOOKS_DATASET)
-        data = load_and_parse_data(path)
-        user_favorites_path = USER_FAVORITES_BOOKS
-        break
-    print("Invalid choice. Please enter 'm' for movies or 'b' for books.")
+    favorite_genre_weights = get_favorite_genre_weights(data, user_favorites_path, is_movie)
 
-favorite_genre_weights = get_favorite_genre_weights(data, user_favorites_path, is_movie)
+    while True:
+        choice = input("Enter an emotion (joy, sadness, fear, anger, despondent, excitement, curiosity, anxious): ").strip().lower()
+        if choice in emotion_lookup:
+            emotion_input = emotion_lookup[choice]
+            break
+        print(f"Invalid emotion '{choice}'. Please try again.")
 
-while True:
-    choice = input(f"Enter an emotion (joy, sadness, fear, anger, despondent, excitement, curiosity, anxious): ").strip().lower()
-    if choice in emotion_lookup:
-        emotion_input = emotion_lookup[choice]
-        break
-    print(f"Invalid emotion '{choice}'. Please try again.")
+    print_recommendations_by_emotion(emotion_input, data, favorite_genre_weights, is_movie)
 
-print_recommendations_by_emotion(emotion_input, data, favorite_genre_weights, is_movie)
+
+if __name__ == "__main__":
+    run_cli()
