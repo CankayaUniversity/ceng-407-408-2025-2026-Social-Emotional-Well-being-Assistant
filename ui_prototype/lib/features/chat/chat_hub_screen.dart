@@ -29,11 +29,13 @@ class ChatHubScreen extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.groups),
               title: const Text('Community Rooms'),
-              subtitle: const Text('Join anonymous group chats'),
+              subtitle: const Text('Search rooms or create a new one'),
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const CommunityRoomsScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CommunityRoomsScreen(),
+                  ),
                 );
               },
             ),
