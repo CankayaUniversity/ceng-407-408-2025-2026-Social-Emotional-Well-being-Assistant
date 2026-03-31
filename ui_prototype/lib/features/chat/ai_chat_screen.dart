@@ -34,7 +34,7 @@ Rules:
 1. Be calm, empathetic, and concise.
 2. Do not provide medical diagnosis.
 3. If the user looks in crisis, suggest contacting local emergency support.
-4. If recommendations are provided in context, use only those titles and do not invent items.
+4. If recommendations are provided in context, use only those titles and do not invent items. Use all of the titles provided.
 5. Reply in the user's language when possible.
 ''';
 
@@ -61,7 +61,10 @@ Rules:
   }
 
   Future<void> _saveEmotionToJson(String text, String? emotion) async {
-    if (emotion == null) return;
+    if (_isNeutralEmotion(emotion)) {
+      print('[DEBUG] Skipping neutral emotion entry for history');
+      return;
+    }
 
     try {
       final directory = await getApplicationDocumentsDirectory();
@@ -95,6 +98,152 @@ Rules:
     }
   }
 
+  Future<List<Map<String, dynamic>>> _loadEmotionHistory() async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/emotions.json');
+
+      if (!await file.exists()) {
+        return [];
+      }
+
+      final content = await file.readAsString();
+      if (content.trim().isEmpty) {
+        return [];
+      }
+
+      final decoded = jsonDecode(content);
+      if (decoded is! List) {
+        return [];
+      }
+
+      return decoded
+          .whereType<Map>()
+          .map((entry) => Map<String, dynamic>.from(entry))
+          .where((entry) => !_isNeutralEmotion(entry['emotion']?.toString()))
+          .toList();
+    } catch (e) {
+      print('[ERROR] Failed to load emotion history: $e');
+      return [];
+    }
+  }
+
+  bool _isNeutralEmotion(String? emotion) {
+    final normalized = _normalizeEmotionLabel(emotion);
+    const neutralValues = {
+      'neutral',
+      'none',
+      'unknown',
+      'unsure',
+      'other',
+      'notr',
+    };
+    return normalized.isEmpty || neutralValues.contains(normalized);
+  }
+
+  String _normalizeEmotionLabel(String? emotion) {
+    if (emotion == null) {
+      return '';
+    }
+
+    // Normalize common Turkish characters so labels like "Nötr" map to "notr".
+    final lowered = emotion.trim().toLowerCase();
+    final asciiLike = lowered
+        .replaceAll('ö', 'o')
+        .replaceAll('ü', 'u')
+        .replaceAll('ş', 's')
+        .replaceAll('ç', 'c')
+        .replaceAll('ğ', 'g')
+        .replaceAll('ı', 'i');
+
+    return asciiLike.replaceAll(RegExp(r'[^a-z]'), '');
+  }
+
+  String? _resolveEmotionForRecommendations(
+    String? currentEmotion,
+    List<Map<String, dynamic>> history,
+  ) {
+    final normalizedCurrent = currentEmotion?.trim().toLowerCase();
+
+    final sorted = [...history]
+      ..sort((a, b) {
+        final aTime = DateTime.tryParse(a['timestamp']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime = DateTime.tryParse(b['timestamp']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return aTime.compareTo(bTime);
+      });
+
+    final Map<String, double> weightedScores = {};
+    final Map<String, DateTime> latestSeenAt = {};
+
+    for (int i = 0; i < sorted.length; i++) {
+      final rawEmotion = sorted[i]['emotion']?.toString().trim().toLowerCase();
+      if (rawEmotion == null || rawEmotion.isEmpty || _isNeutralEmotion(rawEmotion)) {
+        continue;
+      }
+
+      // More recent entries get a larger weight.
+      final recencyWeight = (i + 1).toDouble();
+      weightedScores[rawEmotion] = (weightedScores[rawEmotion] ?? 0) + recencyWeight;
+
+      final timestamp = DateTime.tryParse(sorted[i]['timestamp']?.toString() ?? '');
+      if (timestamp != null) {
+        final previous = latestSeenAt[rawEmotion];
+        if (previous == null || timestamp.isAfter(previous)) {
+          latestSeenAt[rawEmotion] = timestamp;
+        }
+      }
+    }
+
+    if (normalizedCurrent != null && !_isNeutralEmotion(normalizedCurrent)) {
+      final currentBonus = (sorted.length + 1).toDouble();
+      weightedScores[normalizedCurrent] = (weightedScores[normalizedCurrent] ?? 0) + currentBonus;
+      latestSeenAt[normalizedCurrent] = DateTime.now();
+    }
+
+    if (weightedScores.isEmpty) {
+      return _isNeutralEmotion(normalizedCurrent) ? null : normalizedCurrent;
+    }
+
+    final ranked = weightedScores.entries.toList()
+      ..sort((a, b) {
+        final scoreComparison = b.value.compareTo(a.value);
+        if (scoreComparison != 0) return scoreComparison;
+
+        final aLatest = latestSeenAt[a.key] ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bLatest = latestSeenAt[b.key] ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bLatest.compareTo(aLatest);
+      });
+
+    return ranked.first.key;
+  }
+
+  String _buildMoodHistoryContext(List<Map<String, dynamic>> history) {
+    final filteredHistory = history
+        .where((entry) => !_isNeutralEmotion(entry['emotion']?.toString()))
+        .toList();
+
+    if (filteredHistory.isEmpty) {
+      return '';
+    }
+
+    final sorted = [...filteredHistory]
+      ..sort((a, b) {
+        final aTime = DateTime.tryParse(a['timestamp']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime = DateTime.tryParse(b['timestamp']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bTime.compareTo(aTime);
+      });
+
+    final snippets = <String>[];
+    for (final entry in sorted.take(3)) {
+      final emotion = entry['emotion']?.toString() ?? 'unknown';
+      final text = entry['text']?.toString().trim() ?? '';
+      final compactText = text.length > 80 ? '${text.substring(0, 80)}...' : text;
+      snippets.add('- emotion: $emotion, message: "$compactText"');
+    }
+
+    return '\n\nRecent mood history (newest first):\n${snippets.join('\n')}';
+  }
+
   Future<String?> _getEmotion(String text) async {
     const apiUrl = 'https://emotion-analysis-production.up.railway.app/analyze-emotion';
     try {
@@ -117,7 +266,7 @@ Rules:
 
   Future<Map<String, dynamic>?> _getRecommendations(
       String emotion, String mediaType) async {
-    const apiUrl = 'http://10.0.2.2:5000/recommend';
+    const apiUrl = 'https://recommendation-production-df1e.up.railway.app/recommend';
     try {
       print('[DEBUG] Calling recommendation API: $apiUrl');
       print('[DEBUG] Emotion: $emotion, Media Type: $mediaType');
@@ -241,6 +390,14 @@ Rules:
       // Save the detected emotion to a JSON file
       await _saveEmotionToJson(text, emotion);
 
+      // Load mood history so recommendation requests can use recent emotional context.
+      final emotionHistory = await _loadEmotionHistory();
+      final recommendationEmotion = _resolveEmotionForRecommendations(
+        emotion,
+        emotionHistory,
+      );
+      print('[DEBUG] Emotion selected for recommendations: ${recommendationEmotion ?? "None"}');
+
       // 2. Check if user is asking for recommendations
       String recommendationContext = '';
       final askingForRecommendations = _isAskingForRecommendations(text);
@@ -253,19 +410,19 @@ Rules:
       Map<String, dynamic>? bookRecs;
       Map<String, dynamic>? movieRecs;
 
-      if (emotion != null && askingForRecommendations) {
-        print('[DEBUG] Fetching recommendations for emotion: $emotion');
+      if (recommendationEmotion != null && askingForRecommendations) {
+        print('[DEBUG] Fetching recommendations for emotion: $recommendationEmotion');
 
         // Get book recommendations only if asking for books (or neither book/movie specified)
         if (askingForBooks || (!askingForBooks && !askingForMovies)) {
           print('[DEBUG] Calling API for books...');
-          bookRecs = await _getRecommendations(emotion, 'books');
+          bookRecs = await _getRecommendations(recommendationEmotion, 'books');
           print('[DEBUG] Book recommendations response: $bookRecs');
 
           if (bookRecs != null && bookRecs['recommendations'].isNotEmpty) {
             print('[DEBUG] Got ${bookRecs['recommendations'].length} books');
             recommendationContext +=
-            '\n\nRecommended books for ${emotion} emotion:\n';
+            '\n\nRecommended books for $recommendationEmotion emotion:\n';
             for (int i = 0; i < bookRecs['recommendations'].length; i++) {
               final book = bookRecs['recommendations'][i];
               print('[DEBUG] Book $i: ${book['title']}');
@@ -280,13 +437,13 @@ Rules:
         // Get movie recommendations only if asking for movies
         if (askingForMovies) {
           print('[DEBUG] Calling API for movies...');
-          movieRecs = await _getRecommendations(emotion, 'movies');
+          movieRecs = await _getRecommendations(recommendationEmotion, 'movies');
           print('[DEBUG] Movie recommendations response: $movieRecs');
 
           if (movieRecs != null && movieRecs['recommendations'].isNotEmpty) {
             print('[DEBUG] Got ${movieRecs['recommendations'].length} movies');
             recommendationContext +=
-            '\n\nRecommended movies for ${emotion} emotion:\n';
+            '\n\nRecommended movies for $recommendationEmotion emotion:\n';
             for (int i = 0; i < movieRecs['recommendations'].length; i++) {
               final movie = movieRecs['recommendations'][i];
               print('[DEBUG] Movie $i: ${movie['title']}');
@@ -299,10 +456,12 @@ Rules:
         }
       }
 
-      // 3. Send message to Gemini with emotion and recommendations (if asked)
-      final prompt = emotion != null
-          ? 'Şu anki ruh halim: $emotion. Mesajım: $text$recommendationContext'
-          : 'Mesajım: $text';
+        // 3. Send message to Gemini with emotion and recommendations (if asked)
+        final moodHistoryContext = _buildMoodHistoryContext(emotionHistory);
+        final effectiveMoodForPrompt = recommendationEmotion ?? emotion;
+        final prompt = effectiveMoodForPrompt != null
+          ? 'Şu anki ruh halim: ${emotion ?? "belirlenemedi"}. Öneriler için tercih edilen ruh hali: $effectiveMoodForPrompt. Mesajım: $text$moodHistoryContext$recommendationContext'
+          : 'Mesajım: $text$moodHistoryContext$recommendationContext';
 
       print('[DEBUG] Final prompt: "$prompt"');
       final response = await _chatSession.sendMessage(
@@ -386,89 +545,89 @@ Rules:
                         ),
                         child: Text(msg.text),
                       ),
-                      if (msg.emotion != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: Chip(
-                            label: Text("Detected emotion: ${msg.emotion}"),
-                          ),
-                        ),
-                      // Display book recommendations
-                      if (msg.bookRecommendations.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8, bottom: 8),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.blue.shade300),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  "Books for you:",
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14),
-                                ),
-                                const SizedBox(height: 8),
-                                ...msg.bookRecommendations.asMap().entries.map(
-                                      (entry) {
-                                    final idx = entry.key;
-                                    final book = entry.value;
-                                    return Padding(
-                                      padding:
-                                      const EdgeInsets.symmetric(vertical: 4),
-                                      child: Text(
-                                        '${idx + 1}. ${book['title']}',
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      // Display movie recommendations
-                      if (msg.movieRecommendations.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8, bottom: 8),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.purple.shade300),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  "Movies for you:",
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14),
-                                ),
-                                const SizedBox(height: 8),
-                                ...msg.movieRecommendations.asMap().entries.map(
-                                      (entry) {
-                                    final idx = entry.key;
-                                    final movie = entry.value;
-                                    return Padding(
-                                      padding:
-                                      const EdgeInsets.symmetric(vertical: 4),
-                                      child: Text(
-                                        '${idx + 1}. ${movie['title']}',
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                      // if (msg.emotion != null)
+                      //   Padding(
+                      //     padding: const EdgeInsets.only(bottom: 6),
+                      //     child: Chip(
+                      //       label: Text("Detected emotion: ${msg.emotion}"),
+                      //     ),
+                      //   ),
+                      // // Display book recommendations
+                      // if (msg.bookRecommendations.isNotEmpty)
+                      //   Padding(
+                      //     padding: const EdgeInsets.only(top: 8, bottom: 8),
+                      //     child: Container(
+                      //       decoration: BoxDecoration(
+                      //         border: Border.all(color: Colors.blue.shade300),
+                      //         borderRadius: BorderRadius.circular(8),
+                      //       ),
+                      //       padding: const EdgeInsets.all(12),
+                      //       child: Column(
+                      //         crossAxisAlignment: CrossAxisAlignment.start,
+                      //         children: [
+                      //           const Text(
+                      //             "Books for you:",
+                      //             style: TextStyle(
+                      //                 fontWeight: FontWeight.bold,
+                      //                 fontSize: 14),
+                      //           ),
+                      //           const SizedBox(height: 8),
+                      //           ...msg.bookRecommendations.asMap().entries.map(
+                      //                 (entry) {
+                      //               final idx = entry.key;
+                      //               final book = entry.value;
+                      //               return Padding(
+                      //                 padding:
+                      //                 const EdgeInsets.symmetric(vertical: 4),
+                      //                 child: Text(
+                      //                   '${idx + 1}. ${book['title']}',
+                      //                   style: const TextStyle(fontSize: 12),
+                      //                 ),
+                      //               );
+                      //             },
+                      //           ),
+                      //         ],
+                      //       ),
+                      //     ),
+                      //   ),
+                      // // Display movie recommendations
+                      // if (msg.movieRecommendations.isNotEmpty)
+                      //   Padding(
+                      //     padding: const EdgeInsets.only(top: 8, bottom: 8),
+                      //     child: Container(
+                      //       decoration: BoxDecoration(
+                      //         border: Border.all(color: Colors.purple.shade300),
+                      //         borderRadius: BorderRadius.circular(8),
+                      //       ),
+                      //       padding: const EdgeInsets.all(12),
+                      //       child: Column(
+                      //         crossAxisAlignment: CrossAxisAlignment.start,
+                      //         children: [
+                      //           const Text(
+                      //             "Movies for you:",
+                      //             style: TextStyle(
+                      //                 fontWeight: FontWeight.bold,
+                      //                 fontSize: 14),
+                      //           ),
+                      //           const SizedBox(height: 8),
+                      //           ...msg.movieRecommendations.asMap().entries.map(
+                      //                 (entry) {
+                      //               final idx = entry.key;
+                      //               final movie = entry.value;
+                      //               return Padding(
+                      //                 padding:
+                      //                 const EdgeInsets.symmetric(vertical: 4),
+                      //                 child: Text(
+                      //                   '${idx + 1}. ${movie['title']}',
+                      //                   style: const TextStyle(fontSize: 12),
+                      //                 ),
+                      //               );
+                      //             },
+                      //           ),
+                      //         ],
+                      //       ),
+                      //     ),
+                      //   ),
                     ],
                   ),
                 );
