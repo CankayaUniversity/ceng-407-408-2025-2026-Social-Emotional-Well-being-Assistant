@@ -1,5 +1,5 @@
 import 'dart:convert';
-import '../../core/api/api_client.dart';
+import '../../../core/api/api_client.dart';
 
 class EmergencyContactApi {
   static Future<List<dynamic>> list() async {
