@@ -1,4 +1,5 @@
 require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 
@@ -16,23 +17,25 @@ app.use(express.json());
 /* =======================
    Root & Health
 ======================= */
-
 app.get("/", (req, res) => {
-  res.send("API is running ✅  Use /health or /api/auth/register");
+  res.send("API is running ✅ Use /health or /api/auth/register");
 });
 
 app.get("/health", (req, res) => {
-  res.json({ ok: true, message: "Server is running" });
+  res.json({
+    ok: true,
+    message: "Server is running",
+  });
 });
 
 /* =======================
    API Routes
 ======================= */
-
 app.use("/api", apiRoutes);
 
 /* =======================
    Community cleanup job
+   24 saatten eski mesajları siler
 ======================= */
 setInterval(async () => {
   try {
@@ -58,7 +61,10 @@ setInterval(async () => {
    404 fallback
 ======================= */
 app.use((req, res) => {
-  res.status(404).json({ message: "Route not found" });
+  res.status(404).json({
+    success: false,
+    error: "Route not found",
+  });
 });
 
 module.exports = app;
