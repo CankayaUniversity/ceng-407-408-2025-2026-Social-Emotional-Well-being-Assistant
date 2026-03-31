@@ -14,7 +14,6 @@ const joinCommunityRoom = async (req, res) => {
     const normalizedRoom = String(room).trim();
     const normalizedUserId = Number(userId);
 
-    // Aynı user-room için halen aktif bir session varsa onu kullan
     let session = await prisma.communityRoomSession.findFirst({
       where: {
         userId: normalizedUserId,
@@ -26,7 +25,6 @@ const joinCommunityRoom = async (req, res) => {
       },
     });
 
-    // Aktif session yoksa yeni session başlat
     if (!session) {
       session = await prisma.communityRoomSession.create({
         data: {
@@ -103,7 +101,6 @@ const getRoomMessages = async (req, res) => {
     const normalizedRoom = String(room).trim();
     const normalizedUserId = Number(userId);
 
-    // Kullanıcının bu room için EN SON session'ını al
     const latestSession = await prisma.communityRoomSession.findFirst({
       where: {
         userId: normalizedUserId,
@@ -162,7 +159,6 @@ const leaveCommunityRoom = async (req, res) => {
     const normalizedRoom = String(room).trim();
     const normalizedUserId = Number(userId);
 
-    // En son aktif session'ı bul
     const activeSession = await prisma.communityRoomSession.findFirst({
       where: {
         userId: normalizedUserId,
@@ -203,6 +199,41 @@ const leaveCommunityRoom = async (req, res) => {
   }
 };
 
+const getOpenRooms = async (req, res) => {
+  try {
+    const activeSessions = await prisma.communityRoomSession.findMany({
+      where: {
+        leftAt: null,
+      },
+      orderBy: {
+        joinedAt: "desc",
+      },
+      select: {
+        room: true,
+      },
+    });
+
+    const uniqueRooms = [
+      ...new Set(
+        activeSessions
+          .map((item) => String(item.room || "").trim())
+          .filter((room) => room.length > 0)
+      ),
+    ];
+
+    return res.status(200).json({
+      success: true,
+      rooms: uniqueRooms,
+    });
+  } catch (error) {
+    console.error("getOpenRooms error:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Açık odalar alınamadı.",
+    });
+  }
+};
+
 const cleanupOldMessages = async (req, res) => {
   try {
     const cutoffDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -234,5 +265,6 @@ module.exports = {
   createMessage,
   getRoomMessages,
   leaveCommunityRoom,
+  getOpenRooms,
   cleanupOldMessages,
 };
