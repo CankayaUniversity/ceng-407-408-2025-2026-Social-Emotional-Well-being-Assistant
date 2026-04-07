@@ -7,6 +7,8 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/api/gemini_service.dart';
 import '../../core/config/app_config.dart';
 
+enum RiskLevel { low, medium, high }
+
 class AiChatScreen extends StatefulWidget {
   const AiChatScreen({super.key});
 
@@ -58,6 +60,38 @@ Rules:
         _error = 'Failed to initialize Gemini: $e';
       });
     }
+  }
+
+  RiskLevel _detectTrigger(
+      String currentEmotion, List<Map<String, dynamic>> history) {
+    final normalizedCurrent = _normalizeEmotionLabel(currentEmotion);
+    const negativeEmotions = {'üzüntü', 'korku', 'öfke'};
+
+    if (!negativeEmotions.contains(normalizedCurrent)) {
+      return RiskLevel.low;
+    }
+
+    // Analyze history for patterns
+    final recentNegativeCount = history
+        .where((entry) =>
+    negativeEmotions.contains(_normalizeEmotionLabel(entry['emotion'])))
+        .length;
+
+    // High risk: current negative emotion + 2 recent negative emotions
+    if (recentNegativeCount >= 2) {
+      print('[DEBUG] High risk detected: $currentEmotion (History count: $recentNegativeCount)');
+      return RiskLevel.high;
+    }
+
+    // Medium risk: current negative emotion + 1 recent negative emotion
+    if (recentNegativeCount == 1) {
+      print('[DEBUG] Medium risk detected: $currentEmotion (History count: $recentNegativeCount)');
+      return RiskLevel.medium;
+    }
+
+    // Low risk: isolated negative emotion
+    print('[DEBUG] Low risk detected: $currentEmotion');
+    return RiskLevel.low;
   }
 
   Future<void> _saveEmotionToJson(String text, String? emotion) async {
@@ -410,6 +444,24 @@ Rules:
       Map<String, dynamic>? bookRecs;
       Map<String, dynamic>? movieRecs;
 
+      // Trigger Detection
+      final riskLevel = emotion != null
+          ? _detectTrigger(emotion, emotionHistory)
+          : RiskLevel.low;
+      String riskContext = '';
+      switch (riskLevel) {
+        case RiskLevel.high:
+          riskContext =
+          '\n\n[CRITICAL] User seems to be in high distress. Prioritize empathy, de-escalation, and suggest professional help. Avoid making jokes or being overly casual. Ask if they want to talk about what is causing these feelings.';
+          break;
+        case RiskLevel.medium:
+          riskContext =
+          '\n\n[WARNING] User is showing signs of recurring negative emotions. Be extra supportive and gentle. Acknowledge their feelings.';
+          break;
+        default:
+          break;
+      }
+
       if (recommendationEmotion != null && askingForRecommendations) {
         print('[DEBUG] Fetching recommendations for emotion: $recommendationEmotion');
 
@@ -460,8 +512,8 @@ Rules:
         final moodHistoryContext = _buildMoodHistoryContext(emotionHistory);
         final effectiveMoodForPrompt = recommendationEmotion ?? emotion;
         final prompt = effectiveMoodForPrompt != null
-          ? 'Şu anki ruh halim: ${emotion ?? "belirlenemedi"}. Öneriler için tercih edilen ruh hali: $effectiveMoodForPrompt. Mesajım: $text$moodHistoryContext$recommendationContext'
-          : 'Mesajım: $text$moodHistoryContext$recommendationContext';
+          ? 'Şu anki ruh halim: ${emotion ?? "belirlenemedi"}. Öneriler için tercih edilen ruh hali: $effectiveMoodForPrompt. Mesajım: $text$moodHistoryContext$recommendationContext$riskContext'
+          : 'Mesajım: $text$moodHistoryContext$recommendationContext$riskContext';
 
       print('[DEBUG] Final prompt: "$prompt"');
       final response = await _chatSession.sendMessage(
@@ -479,6 +531,7 @@ Rules:
             aiResponse,
             false,
             emotion: emotion,
+            riskLevel: riskLevel,
             bookRecommendations: bookRecs?['recommendations'] ?? [],
             movieRecommendations: movieRecs?['recommendations'] ?? [],
           ),
@@ -628,6 +681,15 @@ Rules:
                       //       ),
                       //     ),
                       //   ),
+                      if (msg.emotion != null && !msg.isUser)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8, top: 4),
+                          child: Chip(
+                            label: Text(
+                                'Emotion: ${msg.emotion} (Risk: ${msg.riskLevel?.toString().split('.').last})'),
+                            backgroundColor: Colors.blueGrey.shade100,
+                          ),
+                        ),
                     ],
                   ),
                 );
@@ -670,6 +732,7 @@ class _Message {
   final String text;
   final bool isUser;
   final String? emotion;
+  final RiskLevel? riskLevel;
   final List<dynamic> bookRecommendations;
   final List<dynamic> movieRecommendations;
 
@@ -677,6 +740,7 @@ class _Message {
       this.text,
       this.isUser, {
         this.emotion,
+        this.riskLevel,
         this.bookRecommendations = const [],
         this.movieRecommendations = const [],
       });
