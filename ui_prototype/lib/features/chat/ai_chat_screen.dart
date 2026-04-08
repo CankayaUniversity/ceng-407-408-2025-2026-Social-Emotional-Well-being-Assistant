@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter_sms/flutter_sms.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/api/gemini_service.dart';
 import '../../core/config/app_config.dart';
+import '../settings/settings_screen.dart';
 
 enum RiskLevel { low, medium, high }
 
@@ -38,6 +41,7 @@ Rules:
 3. If the user looks in crisis, suggest contacting local emergency support.
 4. If recommendations are provided in context, use only those titles and do not invent items. Use all of the titles provided.
 5. Reply in the user's language when possible.
+6. Format your message like a text message only raw text, no markdown, no html, no lists. Just plain text.
 ''';
 
   void _initializeGemini() {
@@ -62,10 +66,61 @@ Rules:
     }
   }
 
+  Future<void> _showPermissionDialog() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isNotificationEnabled = prefs.getBool('isNotificationEnabled') ?? false;
+    final trustedContactPhone = prefs.getString('trustedContactPhone') ?? '';
+
+    if (!isNotificationEnabled || trustedContactPhone.isEmpty) {
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Send Notification?'),
+          content: const Text(
+              'You seem to be in high distress. Would you like to notify your trusted contact?'),
+          actions: [
+            TextButton(
+              child: const Text('No'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: const Text('Yes'),
+              onPressed: () {
+                _sendSms(trustedContactPhone);
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _sendSms(String phoneNumber) async {
+    String message =
+        "This is a notification from the Social-Emotional Wellbeing Assistant. Your trusted contact may be in distress and might need your support.";
+    try {
+      await sendSMS(message: message, recipients: [phoneNumber]);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Notification sent to trusted contact.')),
+      );
+    } catch (error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send notification: $error')),
+      );
+    }
+  }
+
   RiskLevel _detectTrigger(
       String currentEmotion, List<Map<String, dynamic>> history) {
     final normalizedCurrent = _normalizeEmotionLabel(currentEmotion);
-    const negativeEmotions = {'üzüntü', 'korku', 'öfke'};
+    const negativeEmotions = {'uzuntu', 'korku', 'ofke'};
 
     if (!negativeEmotions.contains(normalizedCurrent)) {
       return RiskLevel.low;
@@ -453,6 +508,7 @@ Rules:
         case RiskLevel.high:
           riskContext =
           '\n\n[CRITICAL] User seems to be in high distress. Prioritize empathy, de-escalation, and suggest professional help. Avoid making jokes or being overly casual. Ask if they want to talk about what is causing these feelings.';
+          _showPermissionDialog();
           break;
         case RiskLevel.medium:
           riskContext =
@@ -561,7 +617,20 @@ Rules:
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("AI Chat")),
+      appBar: AppBar(
+        title: const Text("AI Chat"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+              );
+            },
+          ),
+        ],
+      ),
       body: _error != null
           ? Center(
         child: Text(
