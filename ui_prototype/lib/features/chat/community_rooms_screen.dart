@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:ui_prototype/core/api/token_store.dart';
+import 'package:ui_prototype/core/services/notification_service.dart';
 
 class CommunityRoomsScreen extends StatefulWidget {
   const CommunityRoomsScreen({super.key});
@@ -19,6 +21,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
 
   static const String _anonymousModeKey = 'anonymous_mode';
   static const String _nicknameKey = 'user_nickname';
+  static const String _joinedRoomsKey = 'joined_community_rooms';
 
   final TextEditingController _messageController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
@@ -32,6 +35,8 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
 
   // Oda bazlı kullanıcı durumu
   final Map<String, RoomMembershipStatus> _roomStatuses = {};
+  // Kullanıcının katıldığı odaların listesi (Hafıza için)
+  final Set<String> _myJoinedRooms = {};
 
   bool _connected = false;
   bool _isDisposed = false;
@@ -63,6 +68,9 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
 
   Future<void> _initializeScreen() async {
     try {
+      // Bildirim servisini başlat
+      await NotificationService().init();
+
       final CurrentUser? user = await TokenStore.getCurrentUser();
       final prefs = await SharedPreferences.getInstance();
 
@@ -70,14 +78,14 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
         _safeSetState(() {
           _loadingUser = false;
           _loadingRooms = false;
-          _initError =
-          'Giriş yapan kullanıcı bulunamadı. Lütfen tekrar giriş yapın.';
+          _initError = 'Giriş yapan kullanıcı bulunamadı. Lütfen tekrar giriş yapın.';
         });
         return;
       }
 
-      final anonymousMode = prefs.getBool(_anonymousModeKey) ?? true;
-      final nickname = (prefs.getString(_nicknameKey) ?? '').trim();
+      // Kullanıcıya özel nickname ve anonim modu yükle
+      final anonymousMode = prefs.getBool('${_anonymousModeKey}_${user.id}') ?? true;
+      final nickname = (prefs.getString('${_nicknameKey}_${user.id}') ?? '').trim();
 
       final resolvedChatName = anonymousMode
           ? (nickname.isNotEmpty ? nickname : 'Anonim')
@@ -92,10 +100,21 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
         _userReady = true;
         _loadingUser = false;
         _initError = null;
+
+        // Kullanıcıya özel katılmış odaları yükle
+        _myJoinedRooms.clear();
+        final String userJoinedKey = '${_joinedRoomsKey}_${user.id}';
+        final List<String> savedJoinedRooms = prefs.getStringList(userJoinedKey) ?? [];
+        for (final room in savedJoinedRooms) {
+          _myJoinedRooms.add(room);
+          _roomStatuses[_normalizeRoomKey(room)] = RoomMembershipStatus.joined;
+        }
       });
 
       _connectSocket();
       await _loadRooms();
+      // Çevrimdışı mesajları kontrol et
+      await _checkMessagesWhileAway();
     } catch (e) {
       debugPrint('INIT ERROR: $e');
       _safeSetState(() {
@@ -104,6 +123,62 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
         _initError = 'Community Rooms ekranı başlatılamadı.';
       });
     }
+  }
+
+  // Çevrimdışı mesaj bildirimi (Catch-up)
+  Future<void> _checkMessagesWhileAway() async {
+    if (_userId == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    int totalNew = 0;
+
+    for (final room in _myJoinedRooms) {
+      final key = _normalizeRoomKey(room);
+      final lastSeenStr = prefs.getString('last_seen_${_userId}_$key');
+      final lastSeen = lastSeenStr != null
+          ? DateTime.tryParse(lastSeenStr) ?? DateTime.fromMillisecondsSinceEpoch(0)
+          : DateTime.fromMillisecondsSinceEpoch(0);
+
+      try {
+        final response = await http.get(
+          Uri.parse('$backendBaseUrl/api/community/messages?userId=$_userId&room=$room'),
+        );
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(response.body);
+          final List<dynamic> messages = decoded['messages'] is List ? decoded['messages'] : [];
+          for (final m in messages) {
+            final createdAt = DateTime.tryParse(m['createdAt'] ?? '');
+            final senderId = int.tryParse(m['userId']?.toString() ?? '');
+            if (senderId != _userId && createdAt != null && createdAt.isAfter(lastSeen)) {
+              totalNew++;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (totalNew > 0) {
+      NotificationService().showNotification(
+        id: 999,
+        title: 'Community Rooms',
+        body: 'Hoş geldin! Sen yokken $totalNew yeni mesaj geldi.',
+      );
+    }
+  }
+
+  // Okundu bilgisi güncelleme
+  Future<void> _updateLastSeen(String room) async {
+    if (_userId == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final key = _normalizeRoomKey(room);
+    await prefs.setString('last_seen_${_userId}_$key', DateTime.now().toIso8601String());
+  }
+
+  // Hafızaya kaydetme yardımcısı
+  Future<void> _persistJoinedRooms() async {
+    if (_userId == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final String userJoinedKey = '${_joinedRoomsKey}_$_userId';
+    await prefs.setStringList(userJoinedKey, _myJoinedRooms.toList());
   }
 
   void _safeSetState(VoidCallback fn) {
@@ -118,13 +193,18 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   }
 
   void _setRoomStatus(String room, RoomMembershipStatus status) {
-    _roomStatuses[_normalizeRoomKey(room)] = status;
+    final key = _normalizeRoomKey(room);
+    _roomStatuses[key] = status;
+    if (status == RoomMembershipStatus.joined) {
+      _myJoinedRooms.add(room);
+    } else {
+      _myJoinedRooms.removeWhere((r) => _normalizeRoomKey(r) == key);
+    }
+    _persistJoinedRooms();
   }
 
   void _ensureRoomExistsInList(String room) {
-    final exists =
-    _allRooms.any((r) => _normalizeRoomKey(r) == _normalizeRoomKey(room));
-
+    final exists = _allRooms.any((r) => _normalizeRoomKey(r) == _normalizeRoomKey(room));
     if (!exists) {
       _allRooms.insert(0, room);
     }
@@ -147,6 +227,14 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
       _safeSetState(() {
         _connected = true;
       });
+      // Katıldığımız tüm odalara socket üzerinden bağlan
+      for (final room in _myJoinedRooms) {
+        _socket?.emit('join-room', {
+          'room': room,
+          'username': _chatUsername,
+          'userId': _userId,
+        });
+      }
     });
 
     _socket!.onDisconnect((_) {
@@ -156,47 +244,36 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
       });
     });
 
-    _socket!.onConnectError((data) {
-      debugPrint('SOCKET CONNECT ERROR: $data');
-    });
-
-    _socket!.onError((data) {
-      debugPrint('SOCKET ERROR: $data');
-    });
-
-    _socket!.on('system-message', (data) {
-      final msg =
-      data is Map ? (data['message'] ?? '').toString() : data.toString();
-
-      if (msg.isEmpty) return;
-
-      _safeSetState(() {
-        _items.add(
-          _ChatItem(
-            type: ChatItemType.system,
-            message: msg,
-            createdAt: DateTime.now(),
-          ),
-        );
-      });
-    });
-
     _socket!.on('new-message', (data) {
-      debugPrint('NEW MESSAGE EVENT: $data');
-
       if (data is Map) {
-        _safeSetState(() {
-          _items.add(
-            _ChatItem(
-              type: ChatItemType.message,
-              username: (data['username'] ?? '').toString(),
-              message: (data['message'] ?? '').toString(),
-              createdAt:
-              DateTime.tryParse((data['createdAt'] ?? '').toString()) ??
-                  DateTime.now(),
-            ),
-          );
-        });
+        final String msgRoom = (data['room'] ?? '').toString();
+        final String sender = (data['username'] ?? '').toString();
+        final String messageText = (data['message'] ?? '').toString();
+        final int? senderId = int.tryParse(data['userId']?.toString() ?? '');
+
+        // 1. Durum: Odanın içindeyiz, mesajı listeye ekle
+        if (_joined && _currentRoom != null && _normalizeRoomKey(_currentRoom!) == _normalizeRoomKey(msgRoom)) {
+          _safeSetState(() {
+            _items.add(
+              _ChatItem(
+                type: ChatItemType.message,
+                username: sender,
+                message: messageText,
+                createdAt: DateTime.tryParse((data['createdAt'] ?? '').toString()) ?? DateTime.now(),
+              ),
+            );
+          });
+          _updateLastSeen(msgRoom);
+        } else {
+          // 2. Durum: Mesaj başkasından geldiyse ve üye olduğumuz bir odaysa bildirim gönder
+          if (senderId != _userId && _getRoomStatus(msgRoom) == RoomMembershipStatus.joined) {
+            NotificationService().showNotification(
+              id: Random().nextInt(100000),
+              title: msgRoom,
+              body: '$sender: $messageText',
+            );
+          }
+        }
       }
     });
 
@@ -204,136 +281,56 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   }
 
   Future<void> _loadRooms() async {
-    _safeSetState(() {
-      _loadingRooms = true;
-    });
-
+    _safeSetState(() { _loadingRooms = true; });
     try {
-      final response = await http.get(
-        Uri.parse('$backendBaseUrl/api/community/rooms'),
-      );
-
+      final response = await http.get(Uri.parse('$backendBaseUrl/api/community/rooms'));
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final decoded = jsonDecode(response.body);
-
         List<String> rooms = [];
-
         if (decoded is Map && decoded['rooms'] is List) {
-          rooms = (decoded['rooms'] as List)
-              .map((e) {
-            if (e is Map) {
-              return (e['room'] ?? e['name'] ?? '').toString().trim();
-            }
-            return e.toString().trim();
-          })
-              .where((e) => e.isNotEmpty)
-              .toSet()
-              .toList();
+          rooms = (decoded['rooms'] as List).map((e) => (e is Map ? (e['room'] ?? e['name'] ?? '') : e).toString().trim()).where((e) => e.isNotEmpty).toSet().toList();
         }
-
-
         _safeSetState(() {
-          _allRooms
-            ..clear()
-            ..addAll(rooms);
-
-          // Eski status'ler kalsın, yeni odalar listeye eklensin
+          _allRooms..clear()..addAll(rooms);
+          for (final joinedRoom in _myJoinedRooms) { _ensureRoomExistsInList(joinedRoom); }
           for (final room in _allRooms) {
-            _roomStatuses.putIfAbsent(
-              _normalizeRoomKey(room),
-                  () => RoomMembershipStatus.none,
-            );
+            final key = _normalizeRoomKey(room);
+            if (_myJoinedRooms.any((r) => _normalizeRoomKey(r) == key)) {
+              _roomStatuses[key] = RoomMembershipStatus.joined;
+            } else if (_roomStatuses[key] != RoomMembershipStatus.left) {
+              _roomStatuses.putIfAbsent(key, () => RoomMembershipStatus.none);
+            }
           }
-
           _filteredRooms = List<String>.from(_allRooms);
           _loadingRooms = false;
         });
-
         return;
       }
     } catch (e) {
       debugPrint('ROOMS LOAD ERROR: $e');
     }
-
-    _safeSetState(() {
-      _allRooms.clear();   // fallback yok artık
-
-      for (final room in _allRooms) {
-        _roomStatuses.putIfAbsent(
-          _normalizeRoomKey(room),
-              () => RoomMembershipStatus.none,
-        );
-      }
-
-      _filteredRooms = List<String>.from(_allRooms);
-      _loadingRooms = false;
-    });
+    _safeSetState(() { _loadingRooms = false; });
   }
 
   void _filterRooms(String query) {
-    final trimmedQuery = query.trim();
-
+    final trimmedQuery = query.trim().toLowerCase();
     if (trimmedQuery.isEmpty) {
-      _safeSetState(() {
-        _filteredRooms = List<String>.from(_allRooms);
-      });
+      _safeSetState(() { _filteredRooms = List<String>.from(_allRooms); });
       return;
     }
-
-    final ranked = _allRooms
-        .map((room) => MapEntry(room, _similarityScore(trimmedQuery, room)))
-        .where((entry) => entry.value > 0)
-        .toList();
-
-    ranked.sort((a, b) => b.value.compareTo(a.value));
-
     _safeSetState(() {
-      _filteredRooms = ranked.map((e) => e.key).toList();
+      _filteredRooms = _allRooms.where((room) => room.toLowerCase().contains(trimmedQuery)).toList();
     });
-  }
-
-  int _similarityScore(String query, String roomName) {
-    final q = query.toLowerCase().trim();
-    final r = roomName.toLowerCase().trim();
-
-    if (q.isEmpty || r.isEmpty) return 0;
-    if (q == r) return 100;
-    if (r.startsWith(q)) return 80;
-    if (r.contains(q)) return 70;
-
-    final qWords = q.split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
-    final rWords = r.split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
-
-    int score = 0;
-
-    for (final qw in qWords) {
-      for (final rw in rWords) {
-        if (rw == qw) {
-          score += 25;
-        } else if (rw.contains(qw) || qw.contains(rw)) {
-          score += 15;
-        }
-      }
-    }
-
-    return score;
   }
 
   Future<void> _createRoom() async {
     final roomName = _createRoomController.text.trim();
+    if (roomName.isEmpty) return;
 
-    if (roomName.isEmpty) {
-      _showSnack('Lütfen yeni oda için bir konu girin.');
-      return;
-    }
-
-    if (_allRooms.any(
-          (room) => _normalizeRoomKey(room) == _normalizeRoomKey(roomName),
-    )) {
+    if (_allRooms.any((room) => _normalizeRoomKey(room) == _normalizeRoomKey(roomName))) {
       _createRoomController.clear();
       _searchController.text = roomName;
       _filterRooms(roomName);
-      _showSnack('Bu isimde bir oda zaten var. Mevcut odayı seçebilirsiniz.');
       return;
     }
 
@@ -345,259 +342,142 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
 
     _createRoomController.clear();
     _searchController.clear();
-
     await _joinRoom(roomName, isNewRoom: true);
   }
 
   Future<void> _refreshMessagesForRoom(String room) async {
     if (_userId == null) return;
-
     try {
-      final response = await http.get(
-        Uri.parse(
-          '$backendBaseUrl/api/community/messages?userId=$_userId&room=$room',
-        ),
-      );
-
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return;
-      }
-
-      final decoded = jsonDecode(response.body);
-      final List<dynamic> messages =
-      decoded['messages'] is List ? decoded['messages'] : [];
-
-      _safeSetState(() {
-        _items.clear();
-
-        for (final item in messages) {
-          if (item is Map) {
-            _items.add(
-              _ChatItem(
-                type: ChatItemType.message,
-                username: (item['username'] ?? '').toString(),
-                message: (item['message'] ?? '').toString(),
-                createdAt:
-                DateTime.tryParse((item['createdAt'] ?? '').toString()) ??
-                    DateTime.now(),
-              ),
-            );
+      final response = await http.get(Uri.parse('$backendBaseUrl/api/community/messages?userId=$_userId&room=$room'));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final List<dynamic> messages = decoded['messages'] is List ? decoded['messages'] : [];
+        _safeSetState(() {
+          _items.clear();
+          for (final item in messages) {
+            _items.add(_ChatItem(
+              type: ChatItemType.message,
+              username: (item['username'] ?? '').toString(),
+              message: (item['message'] ?? '').toString(),
+              createdAt: DateTime.tryParse((item['createdAt'] ?? '').toString()) ?? DateTime.now(),
+            ));
           }
-        }
-      });
-    } catch (e) {
-      debugPrint('REFRESH MESSAGES ERROR: $e');
-    }
+        });
+      }
+    } catch (e) {}
   }
 
   Future<void> _joinRoom(String room, {bool isNewRoom = false}) async {
     if (_joiningRoom || _leavingRoom) return;
-
-    if (!_userReady || _userId == null || _chatUsername == null) {
-      _showSnack('Kullanıcı bilgileri henüz hazır değil.');
-      return;
-    }
-
     final trimmedRoom = room.trim();
-    if (trimmedRoom.isEmpty) {
-      _showSnack('Geçerli bir oda adı bulunamadı.');
-      return;
-    }
+    if (trimmedRoom.isEmpty) return;
 
-    // Eğer room list ekranından tekrar kendi joined odasına basıyorsa
-    if (_currentRoom != null &&
-        _normalizeRoomKey(_currentRoom!) == _normalizeRoomKey(trimmedRoom) &&
-        _getRoomStatus(trimmedRoom) == RoomMembershipStatus.joined) {
+    if (_currentRoom != null && _normalizeRoomKey(_currentRoom!) == _normalizeRoomKey(trimmedRoom) && _getRoomStatus(trimmedRoom) == RoomMembershipStatus.joined) {
       await _refreshMessagesForRoom(trimmedRoom);
-      _safeSetState(() {
-        _joined = true;
-      });
+      _safeSetState(() { _joined = true; });
       return;
     }
 
     _joiningRoom = true;
-
     try {
       final joinResponse = await http.post(
         Uri.parse('$backendBaseUrl/api/community/join'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'userId': _userId,
-          'room': trimmedRoom,
-        }),
+        body: jsonEncode({'userId': _userId, 'room': trimmedRoom}),
       );
 
-      debugPrint('JOIN STATUS: ${joinResponse.statusCode}');
-      debugPrint('JOIN BODY: ${joinResponse.body}');
+      if (joinResponse.statusCode == 200) {
+        final msgRes = await http.get(Uri.parse('$backendBaseUrl/api/community/messages?userId=$_userId&room=$trimmedRoom'));
+        final decoded = jsonDecode(msgRes.body);
+        final List<dynamic> messages = decoded['messages'] is List ? decoded['messages'] : [];
 
-      if (joinResponse.statusCode < 200 || joinResponse.statusCode >= 300) {
-        _showSnack('Odaya katılınamadı: ${joinResponse.statusCode}');
-        _joiningRoom = false;
-        return;
-      }
-
-      final messagesResponse = await http.get(
-        Uri.parse(
-          '$backendBaseUrl/api/community/messages?userId=$_userId&room=$trimmedRoom',
-        ),
-      );
-
-      debugPrint('MESSAGES STATUS: ${messagesResponse.statusCode}');
-      debugPrint('MESSAGES BODY: ${messagesResponse.body}');
-
-      if (messagesResponse.statusCode < 200 ||
-          messagesResponse.statusCode >= 300) {
-        _showSnack('Mesajlar alınamadı.');
-        _joiningRoom = false;
-        return;
-      }
-
-      final decoded = jsonDecode(messagesResponse.body);
-      final List<dynamic> messages =
-      decoded['messages'] is List ? decoded['messages'] : [];
-
-      _safeSetState(() {
-        _currentRoom = trimmedRoom;
-        _joined = true;
-        _items.clear();
-
-        _ensureRoomExistsInList(trimmedRoom);
-        _setRoomStatus(trimmedRoom, RoomMembershipStatus.joined);
-
-        for (final item in messages) {
-          if (item is Map) {
-            _items.add(
-              _ChatItem(
-                type: ChatItemType.message,
-                username: (item['username'] ?? '').toString(),
-                message: (item['message'] ?? '').toString(),
-                createdAt:
-                DateTime.tryParse((item['createdAt'] ?? '').toString()) ??
-                    DateTime.now(),
-              ),
-            );
+        _safeSetState(() {
+          _currentRoom = trimmedRoom;
+          _joined = true;
+          _items.clear();
+          _setRoomStatus(trimmedRoom, RoomMembershipStatus.joined);
+          for (final item in messages) {
+            _items.add(_ChatItem(
+              type: ChatItemType.message,
+              username: item['username'],
+              message: item['message'],
+              createdAt: DateTime.tryParse(item['createdAt'] ?? '') ?? DateTime.now(),
+            ));
           }
-        }
-
-        _filteredRooms = List<String>.from(_allRooms);
-      });
-
-      final joinPayload = {
-        'room': trimmedRoom,
-        'username': _chatUsername,
-        'userId': _userId,
-      };
-
-      _socket?.emit('join-room', joinPayload);
-
-      if (isNewRoom) {
-        _showSnack('Yeni oda oluşturuldu ve katılındı: $trimmedRoom');
-      } else {
-        _showSnack('Odaya katılındı: $trimmedRoom');
+          _filteredRooms = List<String>.from(_allRooms);
+        });
+        _updateLastSeen(trimmedRoom);
+        _socket?.emit('join-room', {'room': trimmedRoom, 'username': _chatUsername, 'userId': _userId});
       }
     } catch (e) {
       debugPrint('JOIN ERROR: $e');
-      _showSnack('Odaya katılma işlemi başarısız oldu.');
     } finally {
       _joiningRoom = false;
     }
   }
 
   void _backToRoomBrowser() {
+    if (_currentRoom != null) {
+      _updateLastSeen(_currentRoom!);
+    }
     _safeSetState(() {
       _joined = false;
       _messageController.clear();
-      // _currentRoom aynı kalsın, çünkü kullanıcı hala o odanın üyesi
-      // Böylece listeye dönüp tekrar aynı odaya girebilir
-      if (_currentRoom != null) {
-        _setRoomStatus(_currentRoom!, RoomMembershipStatus.joined);
-      }
     });
   }
 
   Future<void> _leaveRoom() async {
-    if (_leavingRoom) return;
-
-    final roomToLeave = _currentRoom;
-
-    if (roomToLeave == null || _userId == null) {
-      _safeSetState(() {
-        _joined = false;
-        _currentRoom = null;
-        _items.clear();
-        _messageController.clear();
-      });
-      return;
-    }
-
+    if (_leavingRoom || _currentRoom == null) return;
+    final roomToLeave = _currentRoom!;
     _leavingRoom = true;
-
     try {
-      final response = await http.post(
+      await http.post(
         Uri.parse('$backendBaseUrl/api/community/leave'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'userId': _userId,
-          'room': roomToLeave,
-        }),
+        body: jsonEncode({'userId': _userId, 'room': roomToLeave}),
       );
-
-      debugPrint('LEAVE STATUS: ${response.statusCode}');
-      debugPrint('LEAVE BODY: ${response.body}');
+      _socket?.emit('leave-room', {'room': roomToLeave, 'userId': _userId});
+      _safeSetState(() {
+        _joined = false;
+        _items.clear();
+        _setRoomStatus(roomToLeave, RoomMembershipStatus.left);
+        _currentRoom = null;
+        _filteredRooms = List<String>.from(_allRooms);
+      });
     } catch (e) {
       debugPrint('LEAVE ERROR: $e');
+    } finally {
+      _leavingRoom = false;
     }
-
-    _socket?.emit('leave-room', {
-      'room': roomToLeave,
-      'userId': _userId,
-    });
-
-    _safeSetState(() {
-      _joined = false;
-      _items.clear();
-      _messageController.clear();
-
-      // Oda listede kalsın ama durumu left olsun
-      _ensureRoomExistsInList(roomToLeave);
-      _setRoomStatus(roomToLeave, RoomMembershipStatus.left);
-
-      // Artık bu oda aktif oda değil
-      _currentRoom = null;
-
-      _filteredRooms = List<String>.from(_allRooms);
-    });
-
-    await _loadRooms();
-    _showSnack('Odadan ayrıldınız.');
-
-    _leavingRoom = false;
   }
 
   void _sendMessage() {
-    if (!_userReady || _userId == null || _chatUsername == null) {
-      _showSnack('Kullanıcı bilgileri henüz hazır değil.');
-      return;
-    }
-
     final text = _messageController.text.trim();
     if (text.isEmpty || !_joined || _currentRoom == null) return;
-
-    final payload = {
-      'room': _currentRoom,
-      'message': text,
-      'userId': _userId,
-      'username': _chatUsername,
-    };
-
-    _socket?.emit('send-message', payload);
+    _socket?.emit('send-message', {'room': _currentRoom, 'message': text, 'userId': _userId, 'username': _chatUsername});
     _messageController.clear();
   }
 
-  void _showSnack(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+  @override
+  Widget build(BuildContext context) {
+    if (_loadingUser) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
+    return WillPopScope(
+      onWillPop: () async {
+        if (_joined) { _backToRoomBrowser(); return false; }
+        return true;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () { if (_joined) _backToRoomBrowser(); else Navigator.pop(context); }),
+          title: Text(_joined ? (_currentRoom ?? 'Chat') : 'Community Rooms'),
+          actions: [
+            Padding(padding: const EdgeInsets.only(right: 12), child: Center(child: Text(_connected ? 'ÇEVRİMİÇİ' : 'ÇEVRİMDIŞI', style: TextStyle(color: _connected ? Colors.green : Colors.red, fontWeight: FontWeight.bold, fontSize: 10)))),
+            Padding(padding: const EdgeInsets.only(right: 16), child: Center(child: Text(_chatUsername ?? '', style: const TextStyle(fontSize: 12)))),
+          ],
+        ),
+        body: _joined ? _buildChatRoom() : _buildRoomBrowser(),
+      ),
     );
   }
 
@@ -607,38 +487,16 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     if (status == RoomMembershipStatus.joined) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.green.shade50,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.green.shade300),
-        ),
-        child: Text(
-          'Joined',
-          style: TextStyle(
-            color: Colors.green.shade700,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.green.shade300)),
+        child: Text('Joined', style: TextStyle(color: Colors.green.shade700, fontSize: 12, fontWeight: FontWeight.w600)),
       );
     }
 
     if (status == RoomMembershipStatus.left) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.red.shade50,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.red.shade300),
-        ),
-        child: Text(
-          'Left',
-          style: TextStyle(
-            color: Colors.red.shade700,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.red.shade300)),
+        child: Text('Left', style: TextStyle(color: Colors.red.shade700, fontSize: 12, fontWeight: FontWeight.w600)),
       );
     }
 
@@ -648,142 +506,37 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   Widget _buildRoomBrowser() {
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-          child: TextField(
-            controller: _searchController,
-            onChanged: (value) {
-              _safeSetState(() {});
-              _filterRooms(value);
-            },
-            decoration: InputDecoration(
-              hintText: 'Katılmak istediğin oda konusunu yaz...',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _searchController.text.isEmpty
-                  ? null
-                  : IconButton(
-                onPressed: () {
-                  _searchController.clear();
-                  _safeSetState(() {});
-                  _filterRooms('');
-                },
-                icon: const Icon(Icons.clear),
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-        ),
+        Padding(padding: const EdgeInsets.fromLTRB(12, 12, 12, 8), child: TextField(controller: _searchController, onChanged: _filterRooms, decoration: InputDecoration(hintText: 'Oda ara...', prefixIcon: const Icon(Icons.search), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Container(
-            width: double.infinity,
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.purple.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.purple.shade100),
-            ),
+            decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(12)),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Yeni oda oluştur',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _createRoomController,
-                  decoration: InputDecoration(
-                    hintText: 'Örn: Internship Stress, Breakup Support',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: ElevatedButton.icon(
-                    onPressed: _createRoom,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Create Room'),
-                  ),
-                ),
+                TextField(controller: _createRoomController, decoration: const InputDecoration(hintText: 'Yeni oda konusu...')),
+                Align(alignment: Alignment.centerRight, child: ElevatedButton(onPressed: _createRoom, child: const Text('Create Room'))),
               ],
             ),
           ),
         ),
         const SizedBox(height: 10),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              _searchController.text.trim().isEmpty
-                  ? 'Open Rooms'
-                  : 'Matching Rooms',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
         Expanded(
-          child: _loadingRooms
-              ? const Center(child: CircularProgressIndicator())
-              : _filteredRooms.isEmpty
-              ? Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.forum_outlined, size: 48),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Uygun oda bulunamadı.',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'İstersen yukarıdan kendi odanı oluşturabilirsin.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey.shade700),
-                  ),
-                ],
-              ),
-            ),
-          )
-              : ListView.builder(
+          child: _loadingRooms ? const Center(child: CircularProgressIndicator()) : ListView.builder(
             itemCount: _filteredRooms.length,
             itemBuilder: (context, index) {
               final room = _filteredRooms[index];
-
               return Card(
-                margin: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
+                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 child: ListTile(
                   leading: const Icon(Icons.groups),
                   title: Text(room),
-                  subtitle: const Text('Tap to join this room'),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       _buildStatusBadge(room),
                       const SizedBox(width: 8),
-                      const Icon(Icons.arrow_forward_ios, size: 18),
+                      const Icon(Icons.arrow_forward_ios, size: 16),
                     ],
                   ),
                   onTap: () => _joinRoom(room),
@@ -799,230 +552,19 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   Widget _buildChatRoom() {
     return Column(
       children: [
-        Container(
-          width: double.infinity,
-          margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade300),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Oda: ${_currentRoom ?? ''}',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                _anonymousMode
-                    ? 'Kullanıcı: ${_chatUsername ?? "Anonim"} (anonim)'
-                    : 'Kullanıcı: ${_realUsername ?? ""} ($_userId)',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
-                child: ElevatedButton(
-                  onPressed: _leaveRoom,
-                  child: const Text('Ayrıl'),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: _items.isEmpty
-              ? const Center(
-            child: Text('Henüz mesaj yok. Sohbeti başlatabilirsin.'),
-          )
-              : ListView.builder(
-            itemCount: _items.length,
-            itemBuilder: (context, index) {
-              final item = _items[index];
-
-              if (item.type == ChatItemType.system) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
-                  ),
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(item.message),
-                    ),
-                  ),
-                );
-              }
-
-              return ListTile(
-                title: Text(item.username ?? 'Bilinmeyen kullanıcı'),
-                subtitle: Text(item.message),
-                trailing: Text(
-                  '${item.createdAt.hour.toString().padLeft(2, '0')}:${item.createdAt.minute.toString().padLeft(2, '0')}',
-                ),
-              );
-            },
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _messageController,
-                  decoration: const InputDecoration(
-                    hintText: 'Mesaj yaz...',
-                    border: OutlineInputBorder(),
-                  ),
-                  onSubmitted: (_) => _sendMessage(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                onPressed: _sendMessage,
-                icon: const Icon(Icons.send),
-              ),
-            ],
-          ),
-        ),
+        ListTile(tileColor: Colors.grey.shade100, title: Text('Oda: $_currentRoom', style: const TextStyle(fontWeight: FontWeight.bold)), trailing: ElevatedButton(onPressed: _leaveRoom, child: const Text('Ayrıl'))),
+        Expanded(child: ListView.builder(itemCount: _items.length, itemBuilder: (context, index) {
+          final item = _items[index];
+          return ListTile(title: Text(item.username ?? 'Anonim', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)), subtitle: Text(item.message), trailing: Text('${item.createdAt.hour}:${item.createdAt.minute}', style: const TextStyle(fontSize: 10)));
+        })),
+        Padding(padding: const EdgeInsets.all(12), child: Row(children: [Expanded(child: TextField(controller: _messageController, decoration: const InputDecoration(hintText: 'Mesaj yaz...'), onSubmitted: (_) => _sendMessage())), IconButton(icon: const Icon(Icons.send), onPressed: _sendMessage)])),
       ],
     );
   }
 
-  @override
-  void dispose() {
-    _isDisposed = true;
-
-    if (_joined && _currentRoom != null && _userId != null) {
-      _socket?.emit('leave-room', {
-        'room': _currentRoom,
-        'userId': _userId,
-      });
-    }
-
-    _socket?.dispose();
-    _messageController.dispose();
-    _searchController.dispose();
-    _createRoomController.dispose();
-
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_loadingUser) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
-
-    if (!_userReady) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Community Rooms')),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(
-              _initError ?? 'Kullanıcı bilgileri yüklenemedi.',
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return WillPopScope(
-      onWillPop: () async {
-        if (_joined) {
-          _backToRoomBrowser();
-          return false;
-        }
-        return true;
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () {
-              if (_joined) {
-                _backToRoomBrowser();
-              } else {
-                Navigator.pop(context);
-              }
-            },
-          ),
-          title: Text(
-            _joined ? (_currentRoom ?? 'Community Room') : 'Community Rooms',
-          ),
-          actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Center(
-                child: Text(
-                  _connected ? 'ÇEVRİMİÇİ' : 'ÇEVRİMDIŞI',
-                  style: TextStyle(
-                    color: _connected ? Colors.green : Colors.red,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: Center(
-                child: Text(
-                  _chatUsername ?? '',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        body: _joined ? _buildChatRoom() : _buildRoomBrowser(),
-      ),
-    );
-  }
+  @override void dispose() { _isDisposed = true; _socket?.dispose(); super.dispose(); }
 }
 
 enum ChatItemType { system, message }
-
-enum RoomMembershipStatus {
-  none,
-  joined,
-  left,
-}
-
-class _ChatItem {
-  final ChatItemType type;
-  final String? username;
-  final String message;
-  final DateTime createdAt;
-
-  _ChatItem({
-    required this.type,
-    this.username,
-    required this.message,
-    required this.createdAt,
-  });
-}
+enum RoomMembershipStatus { none, joined, left }
+class _ChatItem { final ChatItemType type; final String? username; final String message; final DateTime createdAt; _ChatItem({required this.type, this.username, required this.message, required this.createdAt}); }
