@@ -7,7 +7,7 @@ class AppConfig {
   );
 
   /// Gemini Model Selection
-  static const String geminiModel = 'gemini-3.1-flash-lite-preview';
+  static const String geminiModel = 'gemini-2.5-flash';
 
   static bool hasValidGeminiKey() {
     return geminiApiKey != 'YOUR_GEMINI_API_KEY_HERE' && 

@@ -132,8 +132,8 @@ Rules:
     negativeEmotions.contains(_normalizeEmotionLabel(entry['emotion'])))
         .length;
 
-    // High risk: current negative emotion + 2 recent negative emotions
-    if (recentNegativeCount >= 2) {
+    // High risk: current negative emotion + 4 recent negative emotions
+    if (recentNegativeCount >= 5) {
       print('[DEBUG] High risk detected: $currentEmotion (History count: $recentNegativeCount)');
       return RiskLevel.high;
     }
@@ -150,11 +150,6 @@ Rules:
   }
 
   Future<void> _saveEmotionToJson(String text, String? emotion) async {
-    if (_isNeutralEmotion(emotion)) {
-      print('[DEBUG] Skipping neutral emotion entry for history');
-      return;
-    }
-
     try {
       final directory = await getApplicationDocumentsDirectory();
       final file = File('${directory.path}/emotions.json');
@@ -181,7 +176,15 @@ Rules:
 
       await file.writeAsString(jsonEncode(emotionsList));
       print('[DEBUG] Emotion saved to ${file.path}');
-      print(content);
+      
+      // Format each emotion separately to avoid logcat buffer issues
+      print('\n=== Last Emotions (newest first)) ===');
+      final jsonEncoder = const JsonEncoder.withIndent('  ');
+      for (int i = emotionsList.length - 1; i >= 0; i--) {
+        final prettyEmotion = jsonEncoder.convert(emotionsList[i]);
+        print('[${emotionsList.length - i}]\n$prettyEmotion');
+      }
+      print('=== Toplam: ${emotionsList.length} duygular ===\n');
     } catch (e) {
       print('[ERROR] Failed to save emotion to JSON: $e');
     }
@@ -307,31 +310,9 @@ Rules:
   }
 
   String _buildMoodHistoryContext(List<Map<String, dynamic>> history) {
-    final filteredHistory = history
-        .where((entry) => !_isNeutralEmotion(entry['emotion']?.toString()))
-        .toList();
-
-    if (filteredHistory.isEmpty) {
-      return '';
-    }
-
-    final sorted = [...filteredHistory]
-      ..sort((a, b) {
-        final aTime = DateTime.tryParse(a['timestamp']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bTime = DateTime.tryParse(b['timestamp']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return bTime.compareTo(aTime);
-      });
-
-    final snippets = <String>[];
-    for (final entry in sorted.take(3)) {
-      final emotion = entry['emotion']?.toString() ?? 'unknown';
-      final text = entry['text']?.toString().trim() ?? '';
-      final compactText = text.length > 80 ? '${text.substring(0, 80)}...' : text;
-      snippets.add('- emotion: $emotion, message: "$compactText"');
-    }
-
-    return '\n\nRecent mood history (newest first):\n${snippets.join('\n')}';
+    return '';
   }
+
 
   Future<String?> _getEmotion(String text) async {
     const apiUrl = 'https://emotion-analysis-production.up.railway.app/analyze-emotion';
