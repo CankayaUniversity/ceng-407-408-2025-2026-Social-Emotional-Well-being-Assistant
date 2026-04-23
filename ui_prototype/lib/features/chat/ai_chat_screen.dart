@@ -6,7 +6,8 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_sms/flutter_sms.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../core/api/gemini_service.dart';
+// import '../../core/api/gemini_service.dart';
+import '../../core/api/ollama_service.dart';
 import '../../core/config/app_config.dart';
 import '../settings/settings_screen.dart';
 
@@ -22,15 +23,18 @@ class AiChatScreen extends StatefulWidget {
 class _AiChatScreenState extends State<AiChatScreen> {
   final TextEditingController _controller = TextEditingController();
   final List<_Message> _messages = [];
-  late GeminiService _geminiService;
-  late ChatSession _chatSession;
+  // late GeminiService _geminiService;
+  // late ChatSession _chatSession;
+  late OllamaService _ollamaService;
+  late OllamaChatSession _chatSession;
   bool _isLoading = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _initializeGemini();
+    //_initializeGemini();
+    _initializeAI();
   }
 
   static const String _systemPrompt = '''
@@ -44,24 +48,53 @@ Rules:
 6. Format your message like a text message only raw text, no markdown, no html, no lists. Just plain text.
 ''';
 
-  void _initializeGemini() {
-    try {
-      AppConfig.validateGeminiKey();
+  // void _initializeGemini() {
+  //   try {
+  //     AppConfig.validateGeminiKey();
+  //
+  //     if (!AppConfig.hasValidGeminiKey()) {
+  //       setState(() {
+  //         _error = 'Add your Gemini API key.\n\n'
+  //             'Get one from: https://ai.google.dev/\n\n'
+  //             'Then update it in lib/core/config/app_config.dart';
+  //       });
+  //       return;
+  //     }
+  //
+  //     _geminiService = GeminiService(apiKey: AppConfig.geminiApiKey, systemPrompt: _systemPrompt);
+  //     _chatSession = _geminiService.startChatSession();
+  //   } catch (e) {
+  //     setState(() {
+  //       _error = 'Failed to initialize Gemini: $e';
+  //     });
+  //   }
+  // }
 
-      if (!AppConfig.hasValidGeminiKey()) {
+  void _initializeAI() {
+    try {
+      AppConfig.validateSetup();
+
+      if (!AppConfig.hasValidUrl()) {
         setState(() {
-          _error = 'Add your Gemini API key.\n\n'
-              'Get one from: https://ai.google.dev/\n\n'
-              'Then update it in lib/core/config/app_config.dart';
+          _error = 'Ollama URL is invalid. Check AppConfig.';
         });
         return;
       }
 
-      _geminiService = GeminiService(apiKey: AppConfig.geminiApiKey, systemPrompt: _systemPrompt);
-      _chatSession = _geminiService.startChatSession();
+      // Initialize the new local Ollama service
+      _ollamaService = OllamaService(
+        baseUrl: AppConfig.ollamaBaseUrl,
+        model: AppConfig.ollamaModel,
+        systemPrompt: _systemPrompt,
+      );
+      
+      // Fire and forget! This will load the model into your PC's memory right now
+      _ollamaService.warmUpModel(); 
+
+      _chatSession = _ollamaService.startChatSession();
     } catch (e) {
       setState(() {
-        _error = 'Failed to initialize Gemini: $e';
+        _error = 'Failed to initialize AI: $e';
       });
     }
   }
@@ -553,9 +586,10 @@ Rules:
           : 'Mesajım: $text$moodHistoryContext$recommendationContext$riskContext';
 
       print('[DEBUG] Final prompt: "$prompt"');
-      final response = await _chatSession.sendMessage(
-        Content.text(prompt),
-      );
+      // final response = await _chatSession.sendMessage(
+      //   Content.text(prompt),
+      // );
+      final response = await _chatSession.sendMessage(prompt);
 
       final aiResponse = response.text ?? 'No response';
       print('[DEBUG] Gemini response: "$aiResponse"');
