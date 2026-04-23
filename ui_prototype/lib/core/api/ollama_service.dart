@@ -20,6 +20,28 @@ class OllamaService {
       systemPrompt: systemPrompt,
     );
   }
+
+  /// Ping the model to load it into memory. 
+  /// The keep_alive parameter tells Ollama how long to keep it in RAM.
+  Future<void> warmUpModel() async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/generate');
+      await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'model': model,
+          // Just an empty string so it loads the model but doesn't do any thinking
+          'prompt': '', 
+          // Set keep_alive to 60m (1 hour). It won't unload unless idle for an hour.
+          'keep_alive': '60m', 
+        }),
+      );
+      print('[OllamaService] Model $model warmed up successfully.');
+    } catch (e) {
+      print('[OllamaService] Background warm-up failed (ignore if network issue): $e');
+    }
+  }
 }
 
 class OllamaChatSession {
@@ -79,28 +101,6 @@ class OllamaChatSession {
       }
     } catch (e) {
       return OllamaResponse(text: 'Network Error: Make sure over Tailscale your phone can reach $baseUrl\nDetails: $e');
-    }
-  }
-
-  /// Ping the model to load it into memory. 
-  /// The keep_alive parameter tells Ollama how long to keep it in RAM.
-  Future<void> warmUpModel() async {
-    try {
-      final uri = Uri.parse('$baseUrl/api/generate');
-      await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'model': model,
-          // Just an empty string so it loads the model but doesn't do any thinking
-          'prompt': '', 
-          // Set keep_alive to 60m (1 hour). It won't unload unless idle for an hour.
-          'keep_alive': '60m', 
-        }),
-      );
-      print('[OllamaService] Model $model warmed up successfully.');
-    } catch (e) {
-      print('[OllamaService] Background warm-up failed (ignore if network issue): $e');
     }
   }
 }
