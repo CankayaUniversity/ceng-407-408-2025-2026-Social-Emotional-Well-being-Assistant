@@ -105,6 +105,9 @@ class _LoginScreenState extends State<LoginScreen> {
       await prefs.setString("user_email", userEmail);
       await prefs.setString("user_name", userName);
 
+      // KRİTİK: HomeStore'a userId set et
+      await HomeStore.instance.setUser(userId);
+
       // Crisis Help backend’den çekiliyor
       await EmergencyContactStore.instance.load();
 

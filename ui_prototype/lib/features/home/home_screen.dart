@@ -305,7 +305,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   title: "Daily Summary",
                   subtitle: total == 0
                       ? "Bugün için alışkanlık yok."
-                      : "Bugün $done tanesi tamamlandı, ${total - done} kaldı.",
+                      : "$done of $total completed. ${total - done} left to go!",
                 ),
               ],
             ),

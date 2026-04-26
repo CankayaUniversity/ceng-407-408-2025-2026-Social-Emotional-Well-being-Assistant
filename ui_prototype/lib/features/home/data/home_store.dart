@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 
 import '../home_habit_defs.dart';
+import '../medicine/medicine_models.dart';
 
 class HomeStore {
   HomeStore._();
@@ -92,6 +93,32 @@ class HomeStore {
   String _userDayKey(DateTime day) {
     _ensureUser();
     return 'u:${_userId!}|${_dayKey(day)}';
+  }
+
+  String _medicineDayKey(DateTime day) {
+    _ensureUser();
+    return 'med:${_userId!}|${_dayKey(day)}';
+  }
+
+  List<MedicinePlan> readMedicinePlans(DateTime day) {
+    final key = _medicineDayKey(day);
+    final raw = _safeBox.get(key);
+
+    if (raw == null || raw is! List) return [];
+
+    try {
+      return raw.map((m) => MedicinePlan.fromMap(m as Map)).toList();
+    } catch (e) {
+      print("[ERROR] Failed to read medicine plans: $e");
+      return [];
+    }
+  }
+
+  Future<void> writeMedicinePlans(DateTime day, List<MedicinePlan> plans) async {
+    await _ensureBoxOpen();
+    final key = _medicineDayKey(day);
+    final raw = plans.map((p) => p.toMap()).toList();
+    await _safeBox.put(key, raw);
   }
 
   /// Gün verisini okur: HabitType -> (done, time)

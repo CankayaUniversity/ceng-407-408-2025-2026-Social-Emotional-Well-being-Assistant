@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../data/home_store.dart';
 import 'medicine_models.dart';
 
 class MedicineScreen extends StatefulWidget {
@@ -11,7 +12,23 @@ class MedicineScreen extends StatefulWidget {
 }
 
 class _MedicineScreenState extends State<MedicineScreen> {
-  final List<MedicinePlan> _plans = [];
+  List<MedicinePlan> _plans = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  void _loadData() {
+    setState(() {
+      _plans = HomeStore.instance.readMedicinePlans(widget.day);
+    });
+  }
+
+  Future<void> _saveData() async {
+    await HomeStore.instance.writeMedicinePlans(widget.day, _plans);
+  }
 
   bool get _allTakenToday {
     if (_plans.isEmpty) return false;
@@ -43,6 +60,7 @@ class _MedicineScreenState extends State<MedicineScreen> {
     if (plan == null) return;
 
     setState(() => _plans.add(plan));
+    await _saveData();
   }
 
   @override
@@ -167,8 +185,9 @@ class _MedicineScreenState extends State<MedicineScreen> {
                                 child: CheckboxListTile(
                                   dense: true,
                                   value: med.doses[i].taken,
-                                  onChanged: (v) {
+                                  onChanged: (v) async {
                                     setState(() => med.doses[i].taken = v ?? false);
+                                    await _saveData();
                                   },
                                   controlAffinity: ListTileControlAffinity.leading,
                                   title: Text(
@@ -188,7 +207,10 @@ class _MedicineScreenState extends State<MedicineScreen> {
                             Align(
                               alignment: Alignment.centerRight,
                               child: TextButton.icon(
-                                onPressed: () => setState(() => _plans.removeAt(index)),
+                                onPressed: () async {
+                                  setState(() => _plans.removeAt(index));
+                                  await _saveData();
+                                },
                                 icon: const Icon(Icons.delete_outline_rounded),
                                 label: const Text("Sil"),
                               ),
