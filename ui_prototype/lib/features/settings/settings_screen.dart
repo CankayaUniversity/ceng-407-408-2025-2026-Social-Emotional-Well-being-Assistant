@@ -10,7 +10,6 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _trustedContactPhoneController = TextEditingController();
   bool _isNotificationEnabled = false;
 
   @override
@@ -23,8 +22,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _isNotificationEnabled = prefs.getBool('isNotificationEnabled') ?? false;
-      _trustedContactPhoneController.text =
-          prefs.getString('trustedContactPhone') ?? '';
     });
   }
 
@@ -32,8 +29,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (_formKey.currentState!.validate()) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('isNotificationEnabled', _isNotificationEnabled);
-      await prefs.setString(
-          'trustedContactPhone', _trustedContactPhoneController.text);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Settings saved!')),
       );
@@ -62,20 +57,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   });
                 },
               ),
-              if (_isNotificationEnabled)
-                TextFormField(
-                  controller: _trustedContactPhoneController,
-                  decoration: const InputDecoration(
-                    labelText: 'Trusted Contact Phone Number',
-                  ),
-                  keyboardType: TextInputType.phone,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a phone number';
-                    }
-                    return null;
-                  },
-                ),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _saveSettings,

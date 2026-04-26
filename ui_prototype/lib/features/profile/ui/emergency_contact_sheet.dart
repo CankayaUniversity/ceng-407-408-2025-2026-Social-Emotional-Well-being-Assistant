@@ -24,7 +24,7 @@ class EmergencyContactSheet extends StatefulWidget {
 class _EmergencyContactSheetState extends State<EmergencyContactSheet> {
   late final TextEditingController firstName;
   late final TextEditingController lastName;
-  late final TextEditingController phone;
+  late final TextEditingController email;
 
   String relation = "Arkadaş";
   bool isPrimary = true;
@@ -46,7 +46,7 @@ class _EmergencyContactSheetState extends State<EmergencyContactSheet> {
     super.initState();
     firstName = TextEditingController(text: widget.existing?.firstName ?? "");
     lastName = TextEditingController(text: widget.existing?.lastName ?? "");
-    phone = TextEditingController(text: widget.existing?.phone ?? "");
+    email = TextEditingController(text: widget.existing?.email ?? "");
     relation = widget.existing?.relation ?? relation;
 
     // ✅ primary bilgisi (backend modelinde var)
@@ -57,18 +57,18 @@ class _EmergencyContactSheetState extends State<EmergencyContactSheet> {
   void dispose() {
     firstName.dispose();
     lastName.dispose();
-    phone.dispose();
+    email.dispose();
     super.dispose();
   }
 
   void _save() {
     final fn = firstName.text.trim();
     final ln = lastName.text.trim();
-    final ph = phone.text.trim();
+    final em = email.text.trim();
 
-    if (fn.isEmpty || ln.isEmpty || ph.isEmpty) {
+    if (fn.isEmpty || ln.isEmpty || em.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Lütfen isim, soyisim ve telefon gir.")),
+        const SnackBar(content: Text("Lütfen isim, soyisim ve e-posta gir.")),
       );
       return;
     }
@@ -81,7 +81,7 @@ class _EmergencyContactSheetState extends State<EmergencyContactSheet> {
         firstName: fn,
         lastName: ln,
         relation: relation,
-        phone: ph,
+        email: em,
         isPrimary: isPrimary,
       ),
     );
@@ -146,12 +146,12 @@ class _EmergencyContactSheetState extends State<EmergencyContactSheet> {
             ),
             const SizedBox(height: 10),
             TextField(
-              controller: phone,
+              controller: email,
               decoration: const InputDecoration(
-                labelText: "Telefon Numarası",
-                hintText: "05xx... veya +90...",
+                labelText: "E-posta Adresi",
+                hintText: "ornek@mail.com",
               ),
-              keyboardType: TextInputType.phone,
+              keyboardType: TextInputType.emailAddress,
             ),
 
             const SizedBox(height: 10),

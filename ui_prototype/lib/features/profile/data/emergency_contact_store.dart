@@ -7,7 +7,7 @@ class EmergencyContact {
   final String firstName;
   final String lastName;
   final String relation;
-  final String phone;
+  final String email;
   final bool isPrimary;
 
   const EmergencyContact({
@@ -15,7 +15,7 @@ class EmergencyContact {
     required this.firstName,
     required this.lastName,
     required this.relation,
-    required this.phone,
+    required this.email,
     this.isPrimary = true,
   });
 
@@ -34,7 +34,7 @@ class EmergencyContact {
       firstName: fn,
       lastName: ln,
       relation: (m['relation'] ?? '').toString(),
-      phone: (m['phone'] ?? '').toString(),
+      email: (m['phone'] ?? '').toString(),
       isPrimary: m['isPrimary'] == true,
     );
   }
@@ -42,7 +42,7 @@ class EmergencyContact {
   /// UI -> Backend body
   Map<String, dynamic> toApiBody() => {
     "name": fullName,
-    "phone": phone,
+    "phone": email,
     "relation": relation,
     "isPrimary": isPrimary,
   };

@@ -45,4 +45,9 @@ class AppConfig {
       }
     }
   }
+
+  // EmailJS Configuration
+  static const String emailjsServiceId = 'social_emotional_assist';
+  static const String emailjsTemplateId = 'template_vvi1spo';
+  static const String emailjsPublicKey = '_LfgryKG7OhDz_lv_';
 }

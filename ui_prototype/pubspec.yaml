@@ -33,7 +33,7 @@ dependencies:
   hive_flutter: ^1.1.0
 
   url_launcher: ^6.3.0
-  flutter_sms: ^3.0.1
+  emailjs: 4.0.0
   location: ^8.0.1
 
 dev_dependencies:

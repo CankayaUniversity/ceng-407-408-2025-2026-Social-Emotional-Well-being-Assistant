@@ -73,7 +73,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final savedNotes = prefs.getString(_notesKey) ?? '';
     final moodReminder = prefs.getBool(_moodReminderKey) ?? true;
     final crisisNotifications =
-        prefs.getBool(_crisisNotificationsKey) ?? true;
+        prefs.getBool('isNotificationEnabled') ?? true;
 
     _anonymousMode = anonymousMode;
     _moodReminder = moodReminder;
@@ -147,7 +147,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _saveCrisisNotifications(bool value) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_crisisNotificationsKey, value);
+    await prefs.setBool('isNotificationEnabled', value);
   }
 
   Future<void> _toggleAnonymous(bool value) async {
@@ -189,7 +189,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _sendSmsToFirstContact() async {
+  Future<void> _sendEmailToFirstContact() async {
     final contacts = EmergencyContactStore.instance.contacts;
 
     if (contacts.isEmpty) {
@@ -198,23 +198,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     final c = contacts.first;
+    final subject = Uri.encodeComponent("Social-Emotional Wellbeing Assistant");
     final body = Uri.encodeComponent(
       "Merhaba ${c.fullName}, acil bir durumda sana ulaşmam gerekiyor. Müsait misin?",
     );
 
-    final uri = Uri.parse("sms:${c.phone}?body=$body");
+    final uri = Uri.parse("mailto:${c.email}?subject=$subject&body=$body");
 
     try {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("SMS uygulaması bulunamadı.")),
+          const SnackBar(content: Text("E-posta uygulaması bulunamadı.")),
         );
       }
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("SMS açılamadı.")),
+        const SnackBar(content: Text("E-posta açılamadı.")),
       );
     }
   }
@@ -393,9 +394,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 spacing: 4,
                 children: [
                   IconButton(
-                    tooltip: "SMS (first contact)",
-                    onPressed: _sendSmsToFirstContact,
-                    icon: const Icon(Icons.sms_outlined),
+                    tooltip: "E-posta (first contact)",
+                    onPressed: _sendEmailToFirstContact,
+                    icon: const Icon(Icons.email_outlined),
                   ),
                   const Icon(Icons.chevron_right),
                 ],

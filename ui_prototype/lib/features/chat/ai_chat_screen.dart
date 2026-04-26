@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import 'package:flutter_sms/flutter_sms.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/services/notification_service.dart';
+import '../profile/data/emergency_contact_store.dart';
 // import '../../core/api/gemini_service.dart';
 import '../../core/api/ollama_service.dart';
 import '../../core/config/app_config.dart';
@@ -99,53 +100,78 @@ Rules:
     }
   }
 
-  Future<void> _showPermissionDialog() async {
+  Future<void> _triggerAutomaticAlert() async {
+    print('[DEBUG] AI Chat Screen: Triggering Automatic Alert');
     final prefs = await SharedPreferences.getInstance();
     final isNotificationEnabled = prefs.getBool('isNotificationEnabled') ?? false;
-    final trustedContactPhone = prefs.getString('trustedContactPhone') ?? '';
 
-    if (!isNotificationEnabled || trustedContactPhone.isEmpty) {
+    print('[DEBUG] AI Chat Screen: Notifications Enabled (Global): $isNotificationEnabled');
+
+    // Fetch user name
+    final userName = prefs.getString('user_name') ?? 'Your loved one';
+
+    // Get contact from Profile Store
+    final contacts = EmergencyContactStore.instance.contacts;
+    print('[DEBUG] AI Chat Screen: Contact Store Size (from Profile): ${contacts.length}');
+
+    if (contacts.isEmpty) {
+      print('[DEBUG] AI Chat Screen: Alert aborted - No contacts found in User Profile');
       return;
     }
 
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Send Notification?'),
-          content: const Text(
-              'You seem to be in high distress. Would you like to notify your trusted contact?'),
-          actions: [
-            TextButton(
-              child: const Text('No'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              child: const Text('Yes'),
-              onPressed: () {
-                _sendSms(trustedContactPhone);
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        );
-      },
-    );
+    // Prioritize the Primary contact
+    final primary = contacts.firstWhere((c) => c.isPrimary, orElse: () => contacts.first);
+    final contactName = primary.fullName;
+    final recipient = primary.email;
+
+    print('[DEBUG] AI Chat Screen: Selected Primary Contact from Profile: $contactName ($recipient)');
+
+    if (!isNotificationEnabled) {
+      print('[DEBUG] AI Chat Screen: Alert aborted - Notifications not enabled globally');
+      return;
+    }
+
+    if (recipient.isEmpty) {
+      print('[DEBUG] AI Chat Screen: Alert aborted - Contact email is empty');
+      return;
+    }
+
+    String message =
+        "Our system has detected that $userName may be experiencing a high level of emotional distress. Based on their recent interactions, we are reaching out to you as their designated trusted contact. We recommend checking in on them to offer your support.";
+
+    try {
+      await NotificationService().sendEmailAutomatically(
+        recipientEmail: recipient,
+        toName: contactName,
+        userName: userName,
+        message: message,
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Emergency alert sent to your trusted contact.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } catch (error) {
+      print('[ERROR] AI Chat Screen: Failed to send automatic alert: $error');
+    }
   }
 
-  void _sendSms(String phoneNumber) async {
+  void _sendEmail(String email) async {
     String message =
         "This is a notification from the Social-Emotional Wellbeing Assistant. Your trusted contact may be in distress and might need your support.";
     try {
-      await sendSMS(message: message, recipients: [phoneNumber]);
+      await NotificationService().sendEmail(
+        recipient: email,
+        subject: 'Social-Emotional Wellbeing Assistant Notification',
+        body: message,
+      );
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Notification sent to trusted contact.')),
+        const SnackBar(content: Text('Email notification initiated.')),
       );
     } catch (error) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send notification: $error')),
+        SnackBar(content: Text('Failed to send email: $error')),
       );
     }
   }
@@ -522,7 +548,7 @@ Rules:
         case RiskLevel.high:
           riskContext =
           '\n\n[CRITICAL] User seems to be in high distress. Prioritize empathy, de-escalation, and suggest professional help. Avoid making jokes or being overly casual. Ask if they want to talk about what is causing these feelings.';
-          _showPermissionDialog();
+          _triggerAutomaticAlert();
           break;
         case RiskLevel.medium:
           riskContext =

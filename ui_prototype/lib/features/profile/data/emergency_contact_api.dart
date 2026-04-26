@@ -10,13 +10,13 @@ class EmergencyContactApi {
 
   static Future<void> add({
     required String name,
-    String? phone,
+    String? email,
     String? relation,
     bool isPrimary = true,
   }) async {
     final res = await ApiClient.post("/home/emergency-contacts", {
       "name": name,
-      "phone": phone,
+      "phone": email,
       "relation": relation,
       "isPrimary": isPrimary,
     });

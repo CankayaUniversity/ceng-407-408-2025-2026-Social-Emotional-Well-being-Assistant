@@ -119,17 +119,18 @@ class _TrustedContactsSheetState extends State<TrustedContactsSheet> {
     }
   }
 
-  Future<void> _sms(EmergencyContact c) async {
-    final phone = c.phone.trim();
+  Future<void> _sendEmail(EmergencyContact c) async {
+    final email = c.email.trim();
+    final subject = Uri.encodeComponent("Social-Emotional Wellbeing Assistant");
     final body = Uri.encodeComponent(
       "Merhaba ${c.fullName}, acil bir durumda sana ulaşmam gerekiyor. Müsait misin?",
     );
 
-    final uri = Uri.parse("sms:$phone?body=$body");
+    final uri = Uri.parse("mailto:$email?subject=$subject&body=$body");
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("SMS uygulaması bulunamadı.")),
+        const SnackBar(content: Text("E-posta uygulaması bulunamadı.")),
       );
     }
   }
@@ -205,7 +206,7 @@ class _TrustedContactsSheetState extends State<TrustedContactsSheet> {
                         style: const TextStyle(fontWeight: FontWeight.w900),
                       ),
                       subtitle: Text(
-                        "Tel: ${c.phone}",
+                        "E-posta: ${c.email}",
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
                           color: cs.onSurfaceVariant,
@@ -215,9 +216,9 @@ class _TrustedContactsSheetState extends State<TrustedContactsSheet> {
                         spacing: 6,
                         children: [
                           IconButton(
-                            tooltip: "SMS",
-                            onPressed: () => _sms(c),
-                            icon: const Icon(Icons.sms_outlined),
+                            tooltip: "E-posta",
+                            onPressed: () => _sendEmail(c),
+                            icon: const Icon(Icons.email_outlined),
                           ),
                           IconButton(
                             tooltip: "Düzenle",
