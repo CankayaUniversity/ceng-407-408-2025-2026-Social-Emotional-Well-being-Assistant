@@ -84,8 +84,8 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
       }
 
       // Kullanıcıya özel nickname ve anonim modu yükle
-      final anonymousMode = prefs.getBool('${_anonymousModeKey}_${user.id}') ?? true;
-      final nickname = (prefs.getString('${_nicknameKey}_${user.id}') ?? '').trim();
+      final anonymousMode = prefs.getBool(_anonymousModeKey) ?? true;
+      final nickname = (prefs.getString(_nicknameKey) ?? '').trim();
 
       final resolvedChatName = anonymousMode
           ? (nickname.isNotEmpty ? nickname : 'Anonim')
