@@ -33,6 +33,39 @@ const normalizeUsername = (username) => String(username ?? "unknown").trim();
 io.on("connection", (socket) => {
   logMessage(`[CONNECT] (${socket.id})`);
 
+  socket.on("private-chat-request", ({ targetSocketId }) => {
+    const requesterUsername = normalizeUsername(socket.data.username);
+    logMessage(`[PRIVATE-CHAT-REQUEST] from ${requesterUsername} (${socket.id}) to ${targetSocketId}`);
+    socket.to(targetSocketId).emit("private-chat-invitation", {
+      requesterId: socket.id,
+      requesterUsername,
+    });
+  });
+
+  socket.on("private-chat-accept", ({ requesterId }) => {
+    const requesterSocket = io.sockets.sockets.get(requesterId);
+    if (!requesterSocket) {
+      logMessage(`[PRIVATE-CHAT-ACCEPT-FAIL] Requester ${requesterId} not found.`);
+      socket.emit("system-message", { message: "Could not start private chat. User has left." });
+      return;
+    }
+
+    const privateRoom = `private-${requesterId}-${socket.id}`;
+    requesterSocket.join(privateRoom);
+    socket.join(privateRoom);
+
+    const recipientUsername = normalizeUsername(socket.data.username);
+    const requesterUsername = normalizeUsername(requesterSocket.data.username);
+
+    logMessage(`[PRIVATE-CHAT-START] between ${requesterUsername} and ${recipientUsername} in ${privateRoom}`);
+
+    // Notify both users that the private chat has started
+    io.to(privateRoom).emit("private-chat-started", {
+      room: privateRoom,
+      participants: [requesterUsername, recipientUsername],
+    });
+  });
+
   socket.on("join-room", (payload = {}) => {
     try {
       const room = normalizeRoom(payload.room);

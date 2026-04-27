@@ -49,7 +49,40 @@ socket.on("new-message", (data) => {
     console.log(`[${room}] ${sender}: ${message}`);
 });
 
+socket.on("private-chat-invitation", ({ requesterId, requesterUsername }) => {
+    rl.question(
+        `[SYSTEM] ${requesterUsername} wants to start a private chat with you. Accept? (yes/no): `,
+        (answer) => {
+            if (answer.toLowerCase() === "yes") {
+                socket.emit("private-chat-accept", { requesterId });
+            } else {
+                // Optionally, notify the requester that the invitation was declined.
+                console.log("You declined the private chat request.");
+            }
+        }
+    );
+});
+
+socket.on("private-chat-started", ({ room, participants }) => {
+    console.log(`[SYSTEM] Private chat started in room: ${room}`);
+    console.log(`[SYSTEM] Participants: ${participants.join(", ")}`);
+    currentRoom = room; // Switch to the private room
+});
+
 rl.on("line", (input) => {
+    if (input.startsWith("/private ")) {
+        const targetUsername = input.slice("/private ".length).trim();
+        // This is a simplified way to initiate a private chat.
+        // In a real app, you'd need a way to get the socket ID of the target user.
+        // For this example, we'll assume we can get it somehow.
+        // This is a placeholder for a more robust user discovery mechanism.
+        console.log(`Requesting private chat with ${targetUsername}... (dev-only feature)`);
+        // You would need to get the targetSocketId from the server based on the username
+        // For now, this is a conceptual implementation.
+        // socket.emit("private-chat-request", { targetSocketId: "some_socket_id" });
+        return;
+    }
+
     if (input === "/leave") {
         socket.emit("leave-room");
         console.log("Left room");
