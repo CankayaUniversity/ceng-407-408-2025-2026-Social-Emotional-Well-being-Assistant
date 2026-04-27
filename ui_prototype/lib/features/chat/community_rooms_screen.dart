@@ -1,11 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:ui_prototype/core/api/token_store.dart';
+import 'package:ui_prototype/core/services/chat_service.dart';
 import 'package:ui_prototype/core/services/notification_service.dart';
 
 class CommunityRoomsScreen extends StatefulWidget {
@@ -17,7 +18,6 @@ class CommunityRoomsScreen extends StatefulWidget {
 
 class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   static const String backendBaseUrl = 'https://backend-production-66b91.up.railway.app';
-  static const String socketBaseUrl = 'https://sewa-community-chatroom-production.up.railway.app';
 
   static const String _anonymousModeKey = 'anonymous_mode';
   static const String _nicknameKey = 'user_nickname';
@@ -27,9 +27,13 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _createRoomController = TextEditingController();
 
-  IO.Socket? _socket;
+  final ChatService _chatService = ChatService();
+  StreamSubscription? _connectionSubscription;
+  StreamSubscription? _messageSubscription;
+  StreamSubscription? _invitationSubscription;
+  StreamSubscription? _privateChatStartedSubscription;
 
-  final List<_ChatItem> _items = [];
+  final List<ChatItem> _items = [];
   final List<String> _allRooms = [];
   List<String> _filteredRooms = [];
 
@@ -64,6 +68,20 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   void initState() {
     super.initState();
     _initializeScreen();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _connectionSubscription?.cancel();
+    _messageSubscription?.cancel();
+    _invitationSubscription?.cancel();
+    _privateChatStartedSubscription?.cancel();
+    _chatService.dispose();
+    _messageController.dispose();
+    _searchController.dispose();
+    _createRoomController.dispose();
+    super.dispose();
   }
 
   Future<void> _initializeScreen() async {
@@ -111,7 +129,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
         }
       });
 
-      _connectSocket();
+      _initializeChatService();
       await _loadRooms();
       // Çevrimdışı mesajları kontrol et
       await _checkMessagesWhileAway();
@@ -210,74 +228,84 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     }
   }
 
-  void _connectSocket() {
-    _socket?.dispose();
+  void _initializeChatService() {
+    if (_userId == null || _chatUsername == null) return;
 
-    _socket = IO.io(
-      socketBaseUrl,
-      IO.OptionBuilder()
-          .setTransports(['websocket'])
-          .disableAutoConnect()
-          .enableForceNew()
-          .build(),
-    );
+    _chatService.connect(_userId!, _chatUsername!);
 
-    _socket!.onConnect((_) {
-      debugPrint('SOCKET CONNECTED');
+    _connectionSubscription = _chatService.connectionStatus.listen((isConnected) {
       _safeSetState(() {
-        _connected = true;
+        _connected = isConnected;
       });
-      // Katıldığımız tüm odalara socket üzerinden bağlan
-      for (final room in _myJoinedRooms) {
-        _socket?.emit('join-room', {
-          'room': room,
-          'username': _chatUsername,
-          'userId': _userId,
-        });
-      }
-    });
-
-    _socket!.onDisconnect((_) {
-      debugPrint('SOCKET DISCONNECTED');
-      _safeSetState(() {
-        _connected = false;
-      });
-    });
-
-    _socket!.on('new-message', (data) {
-      if (data is Map) {
-        final String msgRoom = (data['room'] ?? '').toString();
-        final String sender = (data['username'] ?? '').toString();
-        final String messageText = (data['message'] ?? '').toString();
-        final int? senderId = int.tryParse(data['userId']?.toString() ?? '');
-
-        // 1. Durum: Odanın içindeyiz, mesajı listeye ekle
-        if (_joined && _currentRoom != null && _normalizeRoomKey(_currentRoom!) == _normalizeRoomKey(msgRoom)) {
-          _safeSetState(() {
-            _items.add(
-              _ChatItem(
-                type: ChatItemType.message,
-                username: sender,
-                message: messageText,
-                createdAt: DateTime.tryParse((data['createdAt'] ?? '').toString()) ?? DateTime.now(),
-              ),
-            );
-          });
-          _updateLastSeen(msgRoom);
-        } else {
-          // 2. Durum: Mesaj başkasından geldiyse ve üye olduğumuz bir odaysa bildirim gönder
-          if (senderId != _userId && _getRoomStatus(msgRoom) == RoomMembershipStatus.joined) {
-            NotificationService().showNotification(
-              id: Random().nextInt(100000),
-              title: msgRoom,
-              body: '$sender: $messageText',
-            );
-          }
+      if (isConnected) {
+        // Katıldığımız tüm odalara socket üzerinden bağlan
+        for (final room in _myJoinedRooms) {
+          _chatService.joinRoom(room, _userId!, _chatUsername!);
         }
       }
     });
 
-    _socket!.connect();
+    _messageSubscription = _chatService.messages.listen((chatItem) {
+      final msgRoom = _chatService.currentRoom; // This might need adjustment based on message data
+      final sender = chatItem.username ?? 'Bilinmeyen';
+      final messageText = chatItem.message ?? '';
+      final senderId = chatItem.userId;
+
+      if (_joined && msgRoom != null && _normalizeRoomKey(_currentRoom!) == _normalizeRoomKey(msgRoom)) {
+        _safeSetState(() {
+          _items.add(chatItem);
+        });
+        _updateLastSeen(msgRoom);
+      } else {
+        if (senderId != _userId && _getRoomStatus(msgRoom ?? '') == RoomMembershipStatus.joined) {
+          NotificationService().showNotification(
+            id: Random().nextInt(100000),
+            title: msgRoom ?? 'Yeni Mesaj',
+            body: '$sender: $messageText',
+          );
+        }
+      }
+    });
+
+    _invitationSubscription = _chatService.invitations.listen((invitation) {
+      _showPrivateChatInvitation(invitation);
+    });
+
+    _privateChatStartedSubscription = _chatService.privateChatSessions.listen((session) {
+      _safeSetState(() {
+        _currentRoom = session.room;
+        _joined = true;
+        _items.clear();
+        _items.add(ChatItem(
+          type: ChatItemType.system,
+          message: 'Özel sohbet başladı. Katılımcılar: ${session.participants.join(', ')}',
+          createdAt: DateTime.now(),
+        ));
+      });
+    });
+  }
+
+  void _showPrivateChatInvitation(PrivateChatInvitation invitation) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Özel Sohbet Daveti'),
+        content: Text('${invitation.requesterUsername} sizinle özel bir sohbet başlatmak istiyor. Kabul ediyor musunuz?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Reddet'),
+          ),
+          TextButton(
+            onPressed: () {
+              _chatService.acceptPrivateChat(invitation.requesterId);
+              Navigator.of(context).pop();
+            },
+            child: const Text('Kabul Et'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadRooms() async {
@@ -355,11 +383,13 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
         _safeSetState(() {
           _items.clear();
           for (final item in messages) {
-            _items.add(_ChatItem(
+            _items.add(ChatItem(
               type: ChatItemType.message,
               username: (item['username'] ?? '').toString(),
               message: (item['message'] ?? '').toString(),
               createdAt: DateTime.tryParse((item['createdAt'] ?? '').toString()) ?? DateTime.now(),
+              userId: item['userId'],
+              socketId: item['socketId'],
             ));
           }
         });
@@ -380,35 +410,32 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
 
     _joiningRoom = true;
     try {
-      final joinResponse = await http.post(
-        Uri.parse('$backendBaseUrl/api/community/join'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'userId': _userId, 'room': trimmedRoom}),
-      );
+      // Use ChatService to join the room
+      _chatService.joinRoom(trimmedRoom, _userId!, _chatUsername!);
 
-      if (joinResponse.statusCode == 200) {
-        final msgRes = await http.get(Uri.parse('$backendBaseUrl/api/community/messages?userId=$_userId&room=$trimmedRoom'));
-        final decoded = jsonDecode(msgRes.body);
-        final List<dynamic> messages = decoded['messages'] is List ? decoded['messages'] : [];
+      // Fetch historical messages
+      final msgRes = await http.get(Uri.parse('$backendBaseUrl/api/community/messages?userId=$_userId&room=$trimmedRoom'));
+      final decoded = jsonDecode(msgRes.body);
+      final List<dynamic> messages = decoded['messages'] is List ? decoded['messages'] : [];
 
-        _safeSetState(() {
-          _currentRoom = trimmedRoom;
-          _joined = true;
-          _items.clear();
-          _setRoomStatus(trimmedRoom, RoomMembershipStatus.joined);
-          for (final item in messages) {
-            _items.add(_ChatItem(
-              type: ChatItemType.message,
-              username: item['username'],
-              message: item['message'],
-              createdAt: DateTime.tryParse(item['createdAt'] ?? '') ?? DateTime.now(),
-            ));
-          }
-          _filteredRooms = List<String>.from(_allRooms);
-        });
-        _updateLastSeen(trimmedRoom);
-        _socket?.emit('join-room', {'room': trimmedRoom, 'username': _chatUsername, 'userId': _userId});
-      }
+      _safeSetState(() {
+        _currentRoom = trimmedRoom;
+        _joined = true;
+        _items.clear();
+        _setRoomStatus(trimmedRoom, RoomMembershipStatus.joined);
+        for (final item in messages) {
+          _items.add(ChatItem(
+            type: ChatItemType.message,
+            username: item['username'],
+            message: item['message'],
+            createdAt: DateTime.tryParse(item['createdAt'] ?? '') ?? DateTime.now(),
+            userId: item['userId'],
+            socketId: item['socketId'],
+          ));
+        }
+        _filteredRooms = List<String>.from(_allRooms);
+      });
+      _updateLastSeen(trimmedRoom);
     } catch (e) {
       debugPrint('JOIN ERROR: $e');
     } finally {
@@ -431,16 +458,13 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     final roomToLeave = _currentRoom!;
     _leavingRoom = true;
     try {
-      await http.post(
-        Uri.parse('$backendBaseUrl/api/community/leave'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'userId': _userId, 'room': roomToLeave}),
-      );
-      _socket?.emit('leave-room', {'room': roomToLeave, 'userId': _userId});
+      _chatService.leaveRoom(roomToLeave, _userId!, _chatUsername!);
       _safeSetState(() {
         _joined = false;
         _items.clear();
-        _setRoomStatus(roomToLeave, RoomMembershipStatus.left);
+        if (!_currentRoom!.startsWith('private-')) {
+          _setRoomStatus(roomToLeave, RoomMembershipStatus.left);
+        }
         _currentRoom = null;
         _filteredRooms = List<String>.from(_allRooms);
       });
@@ -454,8 +478,76 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   void _sendMessage() {
     final text = _messageController.text.trim();
     if (text.isEmpty || !_joined || _currentRoom == null) return;
-    _socket?.emit('send-message', {'room': _currentRoom, 'message': text, 'userId': _userId, 'username': _chatUsername});
+    _chatService.sendMessage(text, _userId!, _chatUsername!);
     _messageController.clear();
+  }
+
+  void _showRoomUsers() {
+    // This is a placeholder for fetching users in a room.
+    // In a real app, you'd need an API endpoint to get users for a room.
+    // For now, we'll use the users from the messages in the chat.
+    final roomUsers = _items
+        .where((item) => item.type == ChatItemType.message && item.userId != _userId)
+        .map((item) =>
+            {'username': item.username, 'userId': item.userId, 'socketId': item.socketId})
+        .toList();
+
+    final uniqueUsers = <String, Map<String, dynamic>>{};
+    for (var user in roomUsers) {
+      if (user['username'] != null) {
+        uniqueUsers[user['username'] as String] = user;
+      }
+    }
+
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return ListView(
+          children: uniqueUsers.values.map((user) {
+            return ListTile(
+              title: Text(user['username']),
+              onTap: () {
+                Navigator.pop(context);
+                _showPrivateChatRequestDialog(user['username'], user['socketId']);
+              },
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  void _showPrivateChatRequestDialog(String username, String? socketId) {
+    if (socketId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot start private chat. User is not available.')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Private Chat'),
+        content: Text('$username ile özel sohbet başlatmak istiyor musunuz?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('İptal'),
+          ),
+          TextButton(
+            onPressed: () {
+              _chatService.sendPrivateChatRequest(socketId);
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Özel sohbet isteği gönderildi.')),
+              );
+            },
+            child: const Text('Gönder'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -472,6 +564,11 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
           leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () { if (_joined) _backToRoomBrowser(); else Navigator.pop(context); }),
           title: Text(_joined ? (_currentRoom ?? 'Chat') : 'Community Rooms'),
           actions: [
+            if (_joined && !_currentRoom!.startsWith('private-'))
+              IconButton(
+                icon: const Icon(Icons.people),
+                onPressed: _showRoomUsers,
+              ),
             Padding(padding: const EdgeInsets.only(right: 12), child: Center(child: Text(_connected ? 'ÇEVRİMİÇİ' : 'ÇEVRİMDIŞI', style: TextStyle(color: _connected ? Colors.green : Colors.red, fontWeight: FontWeight.bold, fontSize: 10)))),
             Padding(padding: const EdgeInsets.only(right: 16), child: Center(child: Text(_chatUsername ?? '', style: const TextStyle(fontSize: 12)))),
           ],
@@ -552,19 +649,57 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   Widget _buildChatRoom() {
     return Column(
       children: [
-        ListTile(tileColor: Colors.grey.shade100, title: Text('Oda: $_currentRoom', style: const TextStyle(fontWeight: FontWeight.bold)), trailing: ElevatedButton(onPressed: _leaveRoom, child: const Text('Ayrıl'))),
-        Expanded(child: ListView.builder(itemCount: _items.length, itemBuilder: (context, index) {
-          final item = _items[index];
-          return ListTile(title: Text(item.username ?? 'Anonim', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)), subtitle: Text(item.message), trailing: Text('${item.createdAt.hour}:${item.createdAt.minute}', style: const TextStyle(fontSize: 10)));
-        })),
-        Padding(padding: const EdgeInsets.all(12), child: Row(children: [Expanded(child: TextField(controller: _messageController, decoration: const InputDecoration(hintText: 'Mesaj yaz...'), onSubmitted: (_) => _sendMessage())), IconButton(icon: const Icon(Icons.send), onPressed: _sendMessage)])),
+        Expanded(
+          child: ListView.builder(
+            itemCount: _items.length,
+            itemBuilder: (context, index) {
+              final item = _items[index];
+              if (item.type == ChatItemType.system) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(item.message ?? '', style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
+                  ),
+                );
+              }
+              final isMe = item.userId == _userId;
+              return ListTile(
+                title: Text(item.username ?? 'Bilinmeyen', style: TextStyle(fontWeight: isMe ? FontWeight.bold : FontWeight.normal)),
+                subtitle: Text(item.message ?? ''),
+                trailing: Text(
+                  '${item.createdAt.hour}:${item.createdAt.minute.toString().padLeft(2, '0')}',
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+              );
+            },
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _messageController,
+                  decoration: const InputDecoration(hintText: 'Mesajınızı yazın...'),
+                  onSubmitted: (_) => _sendMessage(),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.send),
+                onPressed: _sendMessage,
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
-
-  @override void dispose() { _isDisposed = true; _socket?.dispose(); super.dispose(); }
 }
 
-enum ChatItemType { system, message }
-enum RoomMembershipStatus { none, joined, left }
-class _ChatItem { final ChatItemType type; final String? username; final String message; final DateTime createdAt; _ChatItem({required this.type, this.username, required this.message, required this.createdAt}); }
+
+enum RoomMembershipStatus {
+  none,
+  joined,
+  left,
+}

@@ -11,7 +11,7 @@ class GlobalChatService {
   factory GlobalChatService() => _instance;
   GlobalChatService._internal();
 
-  static const String socketBaseUrl = 'https://sewa-community-chatroom-production.up.railway.app';
+  static const String socketBaseUrl = 'https://private-chat-production-2151.up.railway.app';
   static const String _joinedRoomsKey = 'joined_community_rooms';
 
   IO.Socket? _socket;
