@@ -1,4 +1,3 @@
-import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import torch
@@ -8,22 +7,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 # --------------------------------------------------
 # Sabitler
 # --------------------------------------------------
-MODEL_SOURCE = os.getenv("MODEL_SOURCE", "emotion_tr_bert")
-HF_TOKEN = os.getenv("HF_TOKEN")
-
-# Duygu → Risk seviyesi eşlemesi
-RISK_MAP = {
-    "Mutluluk":        "low",
-    "Arzu":            "low",
-    "Nötr":            "low",
-    "Korku":           "medium",
-    "Şaşkınlık":       "medium",
-    "Kafa Karışıklığı": "medium",
-    "Öfke":            "medium",
-    "Üzüntü":          "high",
-    "İğrenme":         "high",
-    "Tiksinme":        "high",
-}
+MODEL_PATH = "emotion_tr_bert"
 
 # --------------------------------------------------
 # Model yükleme (uygulama başlarken bir kez)
@@ -31,11 +15,11 @@ RISK_MAP = {
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 try:
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_SOURCE, token=HF_TOKEN)
-    model = AutoModelForSequenceClassification.from_pretrained(MODEL_SOURCE, token=HF_TOKEN)
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
+    model = AutoModelForSequenceClassification.from_pretrained(MODEL_PATH)
     model.to(device)
     model.eval()
-    print(f"Model '{MODEL_SOURCE}' başarıyla yüklendi. Cihaz: {device}")
+    print(f"Model '{MODEL_PATH}' başarıyla yüklendi. Cihaz: {device}")
 except Exception as load_err:
     tokenizer = None
     model = None
@@ -55,7 +39,6 @@ class EmotionRequest(BaseModel):
 
 class EmotionResponse(BaseModel):
     emotion: str
-    risk_level: str
     confidence: float
 
 # --------------------------------------------------
@@ -83,11 +66,9 @@ def predict_emotion(text: str) -> dict:
     confidence = probs[0][pred_id].item()
 
     emotion = model.config.id2label[pred_id]
-    risk_level = RISK_MAP.get(emotion, "medium")
 
     return {
         "emotion": emotion,
-        "risk_level": risk_level,
         "confidence": round(confidence, 4)
     }
 
@@ -125,7 +106,5 @@ async def analyze_emotion(request: EmotionRequest):
         confidence=result["confidence"]
     )
 
-
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", "8000"))
-    uvicorn.run(app, host="0.0.0.0", port=port, reload=False)
+    uvicorn.run(app, host="127.0.0.1", port=8000, reload=False)
