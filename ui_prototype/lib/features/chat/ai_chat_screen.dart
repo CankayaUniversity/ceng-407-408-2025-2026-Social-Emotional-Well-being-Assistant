@@ -374,7 +374,7 @@ Rules:
 
 
   Future<String?> _getEmotion(String text) async {
-    const apiUrl = 'https://emotion-analysis-production.up.railway.app/analyze-emotion';
+    const apiUrl = AppConfig.emotionApiUrl;
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
@@ -395,7 +395,7 @@ Rules:
 
   Future<Map<String, dynamic>?> _getRecommendations(
       String emotion, String mediaType) async {
-    const apiUrl = 'https://recommendation-production-df1e.up.railway.app/recommend';
+    const apiUrl = AppConfig.recommendationApiUrl;
     try {
       print('[DEBUG] Calling recommendation API: $apiUrl');
       print('[DEBUG] Emotion: $emotion, Media Type: $mediaType');

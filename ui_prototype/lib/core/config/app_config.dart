@@ -25,6 +25,32 @@ import 'package:flutter/foundation.dart';
 // }
 
 class AppConfig {
+  // Backend and service endpoints
+  static const String backendBaseUrl = String.fromEnvironment(
+    'BACKEND_BASE_URL',
+    defaultValue: 'https://backend-production-66b91.up.railway.app',
+  );
+
+  static const String backendApiBaseUrl = String.fromEnvironment(
+    'BACKEND_API_BASE_URL',
+    defaultValue: 'https://backend-production-66b91.up.railway.app/api',
+  );
+
+  static const String chatSocketBaseUrl = String.fromEnvironment(
+    'CHAT_SOCKET_BASE_URL',
+    defaultValue: 'https://private-chat-production-2151.up.railway.app',
+  );
+
+  static const String emotionApiUrl = String.fromEnvironment(
+    'EMOTION_API_URL',
+    defaultValue: 'https://emotion-analysis-production.up.railway.app/analyze-emotion',
+  );
+
+  static const String recommendationApiUrl = String.fromEnvironment(
+    'RECOMMENDATION_API_URL',
+    defaultValue: 'https://recommendation-production-df1e.up.railway.app/recommend',
+  );
+
   /// Replace with your computer's Tailscale IP address (e.g. 100.x.y.z)
   static const String ollamaBaseUrl = String.fromEnvironment(
     'OLLAMA_BASE_URL',
@@ -32,7 +58,7 @@ class AppConfig {
   );
 
   /// The model you pulled in the terminal
-  static const String ollamaModel = 'gemma2';
+  static const String ollamaModel = 'gemma4';
 
   static bool hasValidUrl() {
     return ollamaBaseUrl.isNotEmpty && ollamaBaseUrl.startsWith('http');

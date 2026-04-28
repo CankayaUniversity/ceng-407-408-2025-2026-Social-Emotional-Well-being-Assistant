@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:ui_prototype/core/config/app_config.dart';
 
 class AuthApi {
   // Android Emulator: PC'deki localhost'a ulaşmak için 10.0.2.2 kullanılır
-  static const String baseUrl = "https://backend-production-66b91.up.railway.app/api";
+  static const String baseUrl = AppConfig.backendApiBaseUrl;
 
   static Future<Map<String, dynamic>> login({
     required String email,

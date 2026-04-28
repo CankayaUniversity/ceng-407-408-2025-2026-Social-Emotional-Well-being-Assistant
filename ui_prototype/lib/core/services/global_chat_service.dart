@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:ui_prototype/core/api/token_store.dart';
+import '../config/app_config.dart';
 import 'notification_service.dart';
 
 class GlobalChatService {
@@ -11,7 +12,7 @@ class GlobalChatService {
   factory GlobalChatService() => _instance;
   GlobalChatService._internal();
 
-  static const String socketBaseUrl = 'https://private-chat-production-2151.up.railway.app';
+  static const String socketBaseUrl = AppConfig.chatSocketBaseUrl;
   static const String _joinedRoomsKey = 'joined_community_rooms';
 
   IO.Socket? _socket;

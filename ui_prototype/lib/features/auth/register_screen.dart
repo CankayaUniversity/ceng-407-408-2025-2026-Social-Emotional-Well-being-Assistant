@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:ui_prototype/core/config/app_config.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -19,7 +20,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _loading = false;
 
   // ✅ Android Emulator için backend URL
-  static const String _baseUrl = "https://backend-production-66b91.up.railway.app";
+  static const String _baseUrl = AppConfig.backendBaseUrl;
 
   @override
   void dispose() {

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import '../config/app_config.dart';
 
 // --- Data Models ---
 
@@ -43,7 +44,7 @@ class PrivateChatSession {
 // --- Service ---
 
 class ChatService {
-  static const String socketUrl = 'https://private-chat-production-2151.up.railway.app';
+  static const String socketUrl = AppConfig.chatSocketBaseUrl;
 
   IO.Socket? _socket;
   final StreamController<bool> _connectionStatusController = StreamController.broadcast();

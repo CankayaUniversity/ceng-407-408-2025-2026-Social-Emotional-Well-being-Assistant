@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../config/app_config.dart';
 import 'token_store.dart';
 
 class ApiClient {
-  static const String baseUrl = "https://backend-production-66b91.up.railway.app/api";
+  static const String baseUrl = AppConfig.backendApiBaseUrl;
 
   static Future<Map<String, String>> _headers({bool json = true}) async {
     final headers = <String, String>{};

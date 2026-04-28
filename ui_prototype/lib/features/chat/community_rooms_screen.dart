@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ui_prototype/core/api/token_store.dart';
+import 'package:ui_prototype/core/config/app_config.dart';
 import 'package:ui_prototype/core/services/chat_service.dart';
 import 'package:ui_prototype/core/services/notification_service.dart';
 
@@ -17,7 +18,7 @@ class CommunityRoomsScreen extends StatefulWidget {
 }
 
 class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
-  static const String backendBaseUrl = 'https://backend-production-66b91.up.railway.app';
+  static const String backendBaseUrl = AppConfig.backendBaseUrl;
 
   static const String _anonymousModeKey = 'anonymous_mode';
   static const String _nicknameKey = 'user_nickname';
