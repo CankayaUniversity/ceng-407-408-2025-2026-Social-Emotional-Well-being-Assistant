@@ -6,6 +6,7 @@ import 'package:ui_prototype/core/services/notification_service.dart';
 
 import 'app.dart';
 import 'features/home/data/home_store.dart';
+import 'features/chat/data/chat_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +25,9 @@ Future<void> main() async {
 
   // ✅ HomeStore Hive box'ını aç (token gerekmez)
   await HomeStore.instance.init();
+
+  // ✅ ChatStore Hive box'ını aç
+  await ChatStore.instance.init();
 
   runApp(const MyApp());
 }

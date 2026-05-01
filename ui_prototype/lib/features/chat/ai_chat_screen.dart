@@ -5,6 +5,7 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'data/chat_store.dart';
 import '../../core/services/notification_service.dart';
 import '../profile/data/emergency_contact_store.dart';
 // import '../../core/api/gemini_service.dart';
@@ -31,11 +32,31 @@ class _AiChatScreenState extends State<AiChatScreen> {
   bool _isLoading = false;
   String? _error;
 
+  void _safeSetState(VoidCallback fn) {
+    if (!mounted) return;
+    setState(fn);
+  }
+
   @override
   void initState() {
     super.initState();
     //_initializeGemini();
     _initializeAI();
+    _loadHistory();
+  }
+
+  void _loadHistory() {
+    final history = ChatStore.instance.loadAiChat();
+    if (history.isNotEmpty) {
+      _safeSetState(() {
+        _messages.addAll(history.map((m) => _Message.fromMap(m)));
+      });
+    }
+  }
+
+  Future<void> _saveHistory() async {
+    final data = _messages.map((m) => m.toMap()).toList();
+    await ChatStore.instance.saveAiChat(data);
   }
 
   static const String _systemPrompt = '''
@@ -76,7 +97,7 @@ Rules:
       AppConfig.validateSetup();
 
       if (!AppConfig.hasValidUrl()) {
-        setState(() {
+        _safeSetState(() {
           _error = 'Ollama URL is invalid. Check AppConfig.';
         });
         return;
@@ -94,7 +115,7 @@ Rules:
 
       _chatSession = _ollamaService.startChatSession();
     } catch (e) {
-      setState(() {
+      _safeSetState(() {
         _error = 'Failed to initialize AI: $e';
       });
     }
@@ -146,12 +167,14 @@ Rules:
         userName: userName,
         message: message,
       );
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Emergency alert sent to your trusted contact.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Emergency alert sent to your trusted contact.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     } catch (error) {
       print('[ERROR] AI Chat Screen: Failed to send automatic alert: $error');
     }
@@ -166,13 +189,17 @@ Rules:
         subject: 'Social-Emotional Wellbeing Assistant Notification',
         body: message,
       );
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Email notification initiated.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Email notification initiated.')),
+        );
+      }
     } catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send email: $error')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to send email: $error')),
+        );
+      }
     }
   }
 
@@ -504,7 +531,7 @@ Rules:
     final text = _controller.text.trim();
     if (text.isEmpty) return;
 
-    setState(() {
+    _safeSetState(() {
       _messages.add(_Message(text, true));
       _controller.clear();
       _isLoading = true;
@@ -622,7 +649,7 @@ Rules:
       print('[DEBUG] Book recs for message: ${bookRecs?['recommendations'] ?? []}');
       print('[DEBUG] Movie recs for message: ${movieRecs?['recommendations'] ?? []}');
 
-      setState(() {
+      _safeSetState(() {
         _messages.add(
           _Message(
             aiResponse,
@@ -635,9 +662,10 @@ Rules:
         );
         _isLoading = false;
       });
+      _saveHistory();
     } catch (e) {
       print('[ERROR] Exception: $e');
-      setState(() {
+      _safeSetState(() {
         _messages.add(
           _Message(
             'Sorry, I encountered an error: $e',
@@ -854,4 +882,22 @@ class _Message {
         this.bookRecommendations = const [],
         this.movieRecommendations = const [],
       });
+
+  Map<String, dynamic> toMap() => {
+    'text': text,
+    'isUser': isUser,
+    'emotion': emotion,
+    'riskLevel': riskLevel?.index,
+    'bookRecommendations': bookRecommendations,
+    'movieRecommendations': movieRecommendations,
+  };
+
+  factory _Message.fromMap(Map<dynamic, dynamic> map) => _Message(
+    map['text'] as String,
+    map['isUser'] as bool,
+    emotion: map['emotion'] as String?,
+    riskLevel: map['riskLevel'] != null ? RiskLevel.values[map['riskLevel'] as int] : null,
+    bookRecommendations: map['bookRecommendations'] as List<dynamic>? ?? [],
+    movieRecommendations: map['movieRecommendations'] as List<dynamic>? ?? [],
+  );
 }

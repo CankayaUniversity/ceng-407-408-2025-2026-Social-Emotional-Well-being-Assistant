@@ -8,6 +8,7 @@ import 'services/auth_api.dart';
 
 // Store importları
 import 'package:ui_prototype/features/home/data/home_store.dart';
+import 'package:ui_prototype/features/chat/data/chat_store.dart';
 import 'package:ui_prototype/features/profile/data/emergency_contact_store.dart';
 // Mood store varsa aç:
 // import 'package:ui_prototype/features/mood/data/mood_store.dart';
@@ -107,6 +108,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
       // KRİTİK: HomeStore'a userId set et
       await HomeStore.instance.setUser(userId);
+
+      // KRİTİK: ChatStore'a userId set et
+      await ChatStore.instance.setUser(userId);
 
       // Crisis Help backend’den çekiliyor
       await EmergencyContactStore.instance.load();

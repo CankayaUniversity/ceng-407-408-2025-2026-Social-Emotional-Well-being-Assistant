@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'data/emergency_contact_store.dart';
+import '../chat/data/chat_store.dart';
 import 'ui/trusted_contacts_sheet.dart';
 
 // HomeStore
@@ -231,6 +232,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     HomeStore.instance.reset();
     EmergencyContactStore.instance.reset();
+    ChatStore.instance.reset();
     // MoodStore varsa:
     // MoodStore.instance.reset();
 
