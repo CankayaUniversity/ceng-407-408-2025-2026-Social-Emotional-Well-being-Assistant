@@ -12,6 +12,7 @@ class ChatItem {
   final ChatItemType type;
   final String? username;
   final String? message;
+  final String? room; // Restored room field for UI synchronization
   final DateTime createdAt;
   final int? userId;
   final String? socketId; // For private chat requests
@@ -20,6 +21,7 @@ class ChatItem {
     required this.type,
     this.username,
     this.message,
+    this.room,
     required this.createdAt,
     this.userId,
     this.socketId,
@@ -86,6 +88,7 @@ class ChatService {
         type: ChatItemType.message,
         message: data['message'],
         username: data['username'],
+        room: data['room'], // Restored room assignment
         userId: data['userId'],
         socketId: data['socketId'],
         createdAt: DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),

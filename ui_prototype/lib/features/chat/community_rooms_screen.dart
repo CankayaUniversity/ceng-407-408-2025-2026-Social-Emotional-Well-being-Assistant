@@ -247,7 +247,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     });
 
     _messageSubscription = _chatService.messages.listen((chatItem) {
-      final msgRoom = _chatService.currentRoom; // This might need adjustment based on message data
+      final msgRoom = chatItem.room; // Use the room from the message itself
       final sender = chatItem.username ?? 'Bilinmeyen';
       final messageText = chatItem.message ?? '';
       final senderId = chatItem.userId;
@@ -388,6 +388,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
               type: ChatItemType.message,
               username: (item['username'] ?? '').toString(),
               message: (item['message'] ?? '').toString(),
+              room: room, // Populate room
               createdAt: DateTime.tryParse((item['createdAt'] ?? '').toString()) ?? DateTime.now(),
               userId: item['userId'],
               socketId: item['socketId'],
@@ -403,6 +404,9 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     final trimmedRoom = room.trim();
     if (trimmedRoom.isEmpty) return;
 
+    // ALWAYS inform the service that we are switching/joining this room
+    _chatService.joinRoom(trimmedRoom, _userId!, _chatUsername!);
+
     if (_currentRoom != null && _normalizeRoomKey(_currentRoom!) == _normalizeRoomKey(trimmedRoom) && _getRoomStatus(trimmedRoom) == RoomMembershipStatus.joined) {
       await _refreshMessagesForRoom(trimmedRoom);
       _safeSetState(() { _joined = true; });
@@ -411,10 +415,14 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
 
     _joiningRoom = true;
     try {
-      // Use ChatService to join the room
-      _chatService.joinRoom(trimmedRoom, _userId!, _chatUsername!);
+      // 1. Tell the backend we are joining (Critical for message persistence)
+      await http.post(
+        Uri.parse('$backendBaseUrl/api/community/join'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'userId': _userId, 'room': trimmedRoom}),
+      );
 
-      // Fetch historical messages
+      // 2. Fetch historical messages
       final msgRes = await http.get(Uri.parse('$backendBaseUrl/api/community/messages?userId=$_userId&room=$trimmedRoom'));
       final decoded = jsonDecode(msgRes.body);
       final List<dynamic> messages = decoded['messages'] is List ? decoded['messages'] : [];
@@ -429,6 +437,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
             type: ChatItemType.message,
             username: item['username'],
             message: item['message'],
+            room: trimmedRoom, // Populate room
             createdAt: DateTime.tryParse(item['createdAt'] ?? '') ?? DateTime.now(),
             userId: item['userId'],
             socketId: item['socketId'],
@@ -459,7 +468,16 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     final roomToLeave = _currentRoom!;
     _leavingRoom = true;
     try {
+      // 1. Tell backend we are leaving
+      await http.post(
+        Uri.parse('$backendBaseUrl/api/community/leave'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'userId': _userId, 'room': roomToLeave}),
+      );
+
+      // 2. Tell socket service
       _chatService.leaveRoom(roomToLeave, _userId!, _chatUsername!);
+
       _safeSetState(() {
         _joined = false;
         _items.clear();
