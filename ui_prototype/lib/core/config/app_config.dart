@@ -38,7 +38,7 @@ class AppConfig {
 
   static const String chatSocketBaseUrl = String.fromEnvironment(
     'CHAT_SOCKET_BASE_URL',
-    defaultValue: 'http://localhost:4000',
+    defaultValue: 'https://sewa-community-chatroom-production.up.railway.app',
   );
 
   static const String emotionApiUrl = String.fromEnvironment(
