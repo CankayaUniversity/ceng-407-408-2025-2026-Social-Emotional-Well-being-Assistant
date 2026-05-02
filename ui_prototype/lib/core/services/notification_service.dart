@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
@@ -10,9 +10,16 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin? _notificationsPlugin =
+      !kIsWeb ? FlutterLocalNotificationsPlugin() : null;
 
   Future<void> init() async {
+    // Skip notification initialization on web
+    if (kIsWeb) {
+      print('[NotificationService] Skipping notification init on web platform');
+      return;
+    }
+
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
@@ -20,7 +27,7 @@ class NotificationService {
       android: initializationSettingsAndroid,
     );
 
-    await _notificationsPlugin.initialize(
+    await _notificationsPlugin?.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: (details) {
         // Bildirime tıklandığında yapılacak işlemler buraya gelebilir
@@ -28,9 +35,9 @@ class NotificationService {
     );
 
     // Android 13+ için izin iste
-    if (Platform.isAndroid) {
+    if (defaultTargetPlatform == TargetPlatform.android) {
       await _notificationsPlugin
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
           ?.requestNotificationsPermission();
     }
   }
@@ -40,6 +47,14 @@ class NotificationService {
     required String title,
     required String body,
   }) async {
+    // Skip notifications on web
+    if (kIsWeb || _notificationsPlugin == null) {
+      print('[NotificationService] Notification skipped on web: $title - $body');
+      return;
+    }
+
+    final plugin = _notificationsPlugin;
+
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'community_chat_channel',
       'Community Chat Notifications',
@@ -53,7 +68,7 @@ class NotificationService {
       android: androidDetails,
     );
 
-    await _notificationsPlugin.show(id, title, body, notificationDetails);
+    await plugin.show(id, title, body, notificationDetails);
   }
 
   Future<void> sendEmailAutomatically({
