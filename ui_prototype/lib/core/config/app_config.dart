@@ -38,7 +38,7 @@ class AppConfig {
 
   static const String chatSocketBaseUrl = String.fromEnvironment(
     'CHAT_SOCKET_BASE_URL',
-    defaultValue: 'https://private-chat-production-2151.up.railway.app',
+    defaultValue: 'http://localhost:4000',
   );
 
   static const String emotionApiUrl = String.fromEnvironment(

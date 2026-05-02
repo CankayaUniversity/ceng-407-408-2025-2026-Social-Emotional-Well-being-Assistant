@@ -29,7 +29,7 @@ class ChatItem {
 }
 
 class PrivateChatInvitation {
-  final String requesterId;
+  final int requesterId;
   final String requesterUsername;
 
   PrivateChatInvitation({required this.requesterId, required this.requesterUsername});
@@ -63,7 +63,13 @@ class ChatService {
   String? _currentRoom;
   String? get currentRoom => _currentRoom;
 
+  int? _currentUserId;
+  String? _currentUsername;
+
   void connect(int userId, String username) {
+    _currentUserId = userId;
+    _currentUsername = username;
+
     _socket = IO.io(
         socketUrl,
         IO.OptionBuilder()
@@ -75,6 +81,10 @@ class ChatService {
     _socket!.onConnect((_) {
       debugPrint('ChatService: Connected');
       _connectionStatusController.add(true);
+      _socket?.emit('register-user', {
+        'userId': _currentUserId,
+        'username': _currentUsername,
+      });
     });
 
     _socket!.onDisconnect((_) {
@@ -106,8 +116,12 @@ class ChatService {
 
     _socket!.on('private-chat-invitation', (data) {
       debugPrint("private-chat-invitation received: $data");
+      final parsedId = int.tryParse(data['requesterId']?.toString() ?? '') ?? 0;
+      if (parsedId == 0) {
+        return;
+      }
       _invitationController.add(PrivateChatInvitation(
-        requesterId: data['requesterId'],
+        requesterId: parsedId,
         requesterUsername: data['requesterUsername'],
       ));
     });
@@ -153,12 +167,28 @@ class ChatService {
     });
   }
 
-  void sendPrivateChatRequest(String targetSocketId) {
-    _socket?.emit('private-chat-request', {'targetSocketId': targetSocketId});
+  void sendPrivateChatRequest(String targetSocketId, {int? requesterId, String? requesterUsername}) {
+    final resolvedUserId = requesterId ?? _currentUserId;
+    final resolvedUsername = requesterUsername ?? _currentUsername;
+    _socket?.emit('private-chat-request', {
+      'targetSocketId': targetSocketId,
+      'requesterId': resolvedUserId,
+      'requesterUsername': resolvedUsername,
+    });
   }
 
-  void acceptPrivateChat(String requesterId) {
-    _socket?.emit('private-chat-accept', {'requesterId': requesterId});
+  void acceptPrivateChat(int requesterId, {int? receiverId, String? receiverUsername}) {
+    final resolvedReceiverId = receiverId ?? _currentUserId;
+    final resolvedReceiverUsername = receiverUsername ?? _currentUsername;
+    _socket?.emit('private-chat-accept', {
+      'requesterId': requesterId,
+      'receiverId': resolvedReceiverId,
+      'receiverUsername': resolvedReceiverUsername,
+    });
+  }
+
+  void setCurrentRoom(String? room) {
+    _currentRoom = room;
   }
 
   void dispose() {
@@ -169,4 +199,3 @@ class ChatService {
     _privateChatStartedController.close();
   }
 }
-

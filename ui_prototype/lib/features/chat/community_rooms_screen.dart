@@ -273,6 +273,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     });
 
     _privateChatStartedSubscription = _chatService.privateChatSessions.listen((session) {
+      _chatService.setCurrentRoom(session.room);
       _safeSetState(() {
         _currentRoom = session.room;
         _joined = true;
@@ -299,7 +300,8 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
           ),
           TextButton(
             onPressed: () {
-              _chatService.acceptPrivateChat(invitation.requesterId);
+              _chatService.acceptPrivateChat(invitation.requesterId,
+                  receiverId: _userId, receiverUsername: _chatUsername);
               Navigator.of(context).pop();
             },
             child: const Text('Kabul Et'),
@@ -556,7 +558,8 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
           ),
           TextButton(
             onPressed: () {
-              _chatService.sendPrivateChatRequest(socketId);
+              _chatService.sendPrivateChatRequest(socketId,
+                  requesterId: _userId, requesterUsername: _chatUsername);
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Özel sohbet isteği gönderildi.')),
