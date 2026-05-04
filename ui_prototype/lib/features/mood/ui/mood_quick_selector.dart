@@ -17,60 +17,89 @@ class MoodQuickSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: options.map((o) {
-          final isSel = o.type == selected;
-          final c = palette.colorOf(o.type);
+    const navy = Color(0xFF2B3A67);
+    const mint = Color(0xFFD6E5E3);
 
-          return Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: () => onSelect(o.type),
-              child: Container(
-                width: 130,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isSel ? c.withOpacity(0.18) : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.35),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isSel ? c.withOpacity(0.75) : Colors.transparent,
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: c.withOpacity(0.22),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(o.emoji, style: const TextStyle(fontSize: 18)),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        o.labelTr,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: isSel ? FontWeight.w700 : FontWeight.w500,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              "Nasılsın?",
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: navy,
               ),
             ),
-          );
-        }).toList(),
-      ),
+            Text(
+              "BUGÜN",
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: navy.withOpacity(0.4),
+                letterSpacing: 1.2,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: options.map((o) {
+              final isSel = o.type == selected;
+              final c = palette.colorOf(o.type);
+
+              return Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: GestureDetector(
+                  onTap: () => onSelect(o.type),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 70,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: isSel ? mint : Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isSel ? navy.withOpacity(0.2) : navy.withOpacity(0.05),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: navy.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            )
+                          ],
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          o.emoji,
+                          style: const TextStyle(fontSize: 32),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        o.labelTr.toLowerCase(),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: isSel ? FontWeight.w900 : FontWeight.w600,
+                          color: isSel ? navy : navy.withOpacity(0.4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
     );
   }
 }

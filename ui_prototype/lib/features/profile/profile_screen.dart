@@ -246,241 +246,242 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const navy = Color(0xFF2B3A67);
+    const mint = Color(0xFFD6E5E3);
+    const gold = Color(0xFFFFE6A7);
+    const bgLight = Color(0xFFF8F9FB);
+
     if (_loadingPrefs) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        backgroundColor: bgLight,
+        body: Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(navy))),
       );
     }
 
     final avatar = _avatarFile == null
-        ? const CircleAvatar(radius: 28, child: Icon(Icons.person))
-        : CircleAvatar(radius: 28, backgroundImage: FileImage(_avatarFile!));
+        ? const CircleAvatar(radius: 40, backgroundColor: navy, child: Icon(Icons.person, color: Colors.white, size: 44))
+        : CircleAvatar(radius: 40, backgroundImage: FileImage(_avatarFile!));
 
     final trustedContacts = EmergencyContactStore.instance.contacts;
     final loadingContacts = EmergencyContactStore.instance.loading;
 
     return Scaffold(
+      backgroundColor: bgLight,
       appBar: AppBar(
-        title: const Text("Profile"),
+        backgroundColor: navy,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: const Text("Profile", style: TextStyle(fontWeight: FontWeight.w900)),
         actions: [
           IconButton(
             tooltip: "Logout",
             onPressed: _logout,
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout_rounded, color: Colors.white),
           ),
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         children: [
-          Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+          // Top Profile Card
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: navy.withOpacity(0.05)),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 4))],
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                children: [
-                  Stack(
-                    children: [
-                      avatar,
-                      Positioned(
-                        right: -2,
-                        bottom: -2,
-                        child: InkWell(
-                          onTap: _pickAvatar,
-                          child: CircleAvatar(
-                            radius: 12,
-                            backgroundColor:
-                            Theme.of(context).colorScheme.primary,
-                            child: const Icon(
-                              Icons.edit,
-                              size: 14,
-                              color: Colors.white,
-                            ),
-                          ),
+            child: Column(
+              children: [
+                Stack(
+                  children: [
+                    avatar,
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: InkWell(
+                        onTap: _pickAvatar,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(color: gold, shape: BoxShape.circle),
+                          child: const Icon(Icons.camera_alt_rounded, size: 16, color: navy),
                         ),
                       ),
-                    ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  "NICKNAME",
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: navy, letterSpacing: 1.2),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _nicknameController,
+                  enabled: _anonymousMode,
+                  onChanged: (value) async {
+                    if (_anonymousMode) {
+                      await _saveNickname(value);
+                    }
+                  },
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: navy),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    filled: true,
+                    fillColor: navy.withOpacity(0.05),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    hintText: _anonymousMode ? 'Set your nickname' : _realName,
                   ),
-                  const SizedBox(width: 14),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _anonymousMode ? "Anonymous mode is ON" : "Real identity visible",
+                  style: TextStyle(fontSize: 12, color: Colors.blue.shade700, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 28),
+          Text("User Information", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: navy)),
+          const SizedBox(height: 12),
+
+          // Grouped User Info Card
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: navy.withOpacity(0.05)),
+            ),
+            child: Column(
+              children: [
+                _profileInput("Age", _ageController, navy, onChanged: _saveAge),
+                const SizedBox(height: 16),
+                _profileInput("City", _cityController, navy, onChanged: _saveCity),
+                const SizedBox(height: 16),
+                _profileInput("Notes / Interests", _notesController, navy, maxLines: 3, onChanged: _saveNotes),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 28),
+          Text("Privacy & Safety", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: navy)),
+          const SizedBox(height: 12),
+
+          _switchCard(
+            title: "Anonymous mode",
+            subtitle: "Hide real name in chats",
+            value: _anonymousMode,
+            onChanged: _toggleAnonymous,
+            icon: Icons.visibility_off_rounded,
+            navy: navy, gold: gold
+          ),
+
+          const SizedBox(height: 12),
+
+          // Trusted Contacts Card
+          GestureDetector(
+            onTap: _openTrustedContactsManager,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: navy.withOpacity(0.05)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(color: const Color(0xFFF0F2F5), borderRadius: BorderRadius.circular(14)),
+                    child: const Icon(Icons.shield_rounded, color: navy, size: 24),
+                  ),
+                  const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          "Nickname",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: Colors.black54,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        TextField(
-                          controller: _nicknameController,
-                          enabled: _anonymousMode,
-                          onChanged: (value) async {
-                            if (_anonymousMode) {
-                              await _saveNickname(value);
-                            }
-                          },
-                          decoration: InputDecoration(
-                            isDense: true,
-                            border: const OutlineInputBorder(),
-                            hintText: _anonymousMode
-                                ? 'Anonymous veya takma ad yaz'
-                                : _realName,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
+                        const Text("Trusted Contacts", style: TextStyle(fontWeight: FontWeight.w900, color: navy, fontSize: 16)),
                         Text(
-                          _anonymousMode
-                              ? "Anonymous mode is ON"
-                              : "Anonymous mode is OFF (real identity visible)",
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.black54,
-                          ),
+                          loadingContacts ? "Loading..." : (trustedContacts.isEmpty ? "Manage resources" : "${trustedContacts.length} contacts saved"),
+                          style: TextStyle(fontWeight: FontWeight.w600, color: navy.withOpacity(0.4), fontSize: 13),
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          _sectionTitle("User Information"),
-          _textFieldCard(
-            "Age",
-            _ageController,
-            onChanged: _saveAge,
-          ),
-          _textFieldCard(
-            "City",
-            _cityController,
-            onChanged: _saveCity,
-          ),
-          _textFieldCard(
-            "Notes / Interests (from chat)",
-            _notesController,
-            maxLines: 4,
-            onChanged: _saveNotes,
-          ),
-          const SizedBox(height: 16),
-          _sectionTitle("Privacy & Safety"),
-          _switchTile(
-            title: "Anonymous mode",
-            subtitle: "Hide real name in chats",
-            value: _anonymousMode,
-            onChanged: (v) async {
-              await _toggleAnonymous(v);
-            },
-            icon: Icons.visibility_off,
-          ),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.health_and_safety),
-              title: const Text(
-                "Crisis help (mock)",
-                style: TextStyle(fontWeight: FontWeight.w900),
-              ),
-              subtitle: Text(
-                loadingContacts
-                    ? "Loading trusted contacts..."
-                    : (trustedContacts.isEmpty
-                    ? "Emergency resources / trusted contacts"
-                    : "Trusted contacts: ${trustedContacts.length} kişi"),
-              ),
-              trailing: Wrap(
-                spacing: 4,
-                children: [
                   IconButton(
-                    tooltip: "E-posta (first contact)",
                     onPressed: _sendEmailToFirstContact,
-                    icon: const Icon(Icons.email_outlined),
+                    icon: const Icon(Icons.email_rounded, color: navy),
                   ),
-                  const Icon(Icons.chevron_right),
+                  const Icon(Icons.chevron_right_rounded, color: Colors.grey),
                 ],
               ),
-              onTap: _openTrustedContactsManager,
             ),
           ),
-          const SizedBox(height: 16),
-          _sectionTitle("Notifications"),
-          _switchTile(
-            title: "Daily mood reminder",
-            subtitle: "Remind me to log mood daily",
-            value: _moodReminder,
-            onChanged: (v) async {
-              setState(() => _moodReminder = v);
-              await _saveMoodReminder(v);
-            },
-            icon: Icons.notifications_active,
-          ),
-          _switchTile(
-            title: "Crisis notifications",
-            subtitle: "Show safety prompts when mood is low (mock)",
-            value: _crisisNotifications,
-            onChanged: (v) async {
-              setState(() => _crisisNotifications = v);
-              await _saveCrisisNotifications(v);
-            },
-            icon: Icons.warning_amber_rounded,
-          ),
+
+          const SizedBox(height: 28),
+          Text("Notifications", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: navy)),
+          const SizedBox(height: 12),
+
+          _switchCard(title: "Daily mood reminder", subtitle: "Remind me to log mood daily", value: _moodReminder, onChanged: (v) async { setState(() => _moodReminder = v); await _saveMoodReminder(v); }, icon: Icons.notifications_active_rounded, navy: navy, gold: gold),
+          const SizedBox(height: 12),
+          _switchCard(title: "Crisis notifications", subtitle: "Safety prompts for low mood", value: _crisisNotifications, onChanged: (v) async { setState(() => _crisisNotifications = v); await _saveCrisisNotifications(v); }, icon: Icons.warning_amber_rounded, navy: navy, gold: gold),
+          const SizedBox(height: 40),
         ],
       ),
     );
   }
 
-  Widget _sectionTitle(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w900)),
-    );
-  }
-
-  Widget _textFieldCard(
-      String label,
-      TextEditingController c, {
-        int maxLines = 1,
-        ValueChanged<String>? onChanged,
-      }) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: TextField(
-          controller: c,
-          maxLines: maxLines,
-          onChanged: onChanged,
-          decoration: InputDecoration(
-            labelText: label,
-            border: const OutlineInputBorder(),
-          ),
-        ),
+  Widget _profileInput(String label, TextEditingController c, Color navy, {int maxLines = 1, ValueChanged<String>? onChanged}) {
+    return TextField(
+      controller: c,
+      maxLines: maxLines,
+      onChanged: onChanged,
+      style: TextStyle(fontWeight: FontWeight.w700, color: navy),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: navy.withOpacity(0.4), fontWeight: FontWeight.bold),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE0E4E8))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE0E4E8))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: navy.withOpacity(0.2), width: 2)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
     );
   }
 
-  Widget _switchTile({
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-    required IconData icon,
-  }) {
-    return Card(
+  Widget _switchCard({required String title, required String subtitle, required bool value, required ValueChanged<bool> onChanged, required IconData icon, required Color navy, required Color gold}) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: navy.withOpacity(0.05)),
+      ),
       child: SwitchListTile(
+        activeColor: navy,
+        activeTrackColor: gold,
         value: value,
         onChanged: onChanged,
         title: Row(
           children: [
-            Icon(icon),
-            const SizedBox(width: 10),
-            Expanded(child: Text(title)),
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(color: const Color(0xFFF0F2F5), borderRadius: BorderRadius.circular(10)),
+              child: Icon(icon, color: navy, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(title, style: TextStyle(fontWeight: FontWeight.w800, color: navy, fontSize: 15))),
           ],
         ),
-        subtitle: Text(subtitle),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(left: 50),
+          child: Text(subtitle, style: TextStyle(fontWeight: FontWeight.w600, color: navy.withOpacity(0.4), fontSize: 12)),
+        ),
       ),
     );
   }

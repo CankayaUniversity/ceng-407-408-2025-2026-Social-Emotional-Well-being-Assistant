@@ -166,28 +166,41 @@ class _MoodScreenState extends State<MoodScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const navy = Color(0xFF2B3A67);
+    const mint = Color(0xFFD6E5E3);
+    const gold = Color(0xFFFFE6A7);
+
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text("Mood"),
+        backgroundColor: navy,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: const Text("Mood", style: TextStyle(fontWeight: FontWeight.w900)),
+        centerTitle: false,
         actions: [
           IconButton(
             tooltip: "Tema",
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => MoodThemeScreen(repo: repo)),
             ),
-            icon: const Icon(Icons.palette_outlined),
+            icon: const Icon(Icons.palette_rounded, color: gold),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        backgroundColor: navy,
+        foregroundColor: Colors.white,
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         onPressed: _addOrEditForSelectedDay,
-        child: const Icon(Icons.add),
+        child: const Icon(Icons.add_rounded, size: 32),
       ),
       body: AnimatedBuilder(
         animation: repo,
         builder: (context, _) {
           if (!repo.isLoaded) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(navy)));
           }
 
           final entry = repo.entryOf(selectedDay);
@@ -258,9 +271,9 @@ class _MoodScreenState extends State<MoodScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("Bu ay için mood kaydın bulunmuyor."),
+                        Text("Bu ay için mood kaydın bulunmuyor.", style: TextStyle(fontWeight: FontWeight.w600)),
                         SizedBox(height: 8),
-                        Text("İlk kaydını sağ alttaki + ile ekleyebilirsin."),
+                        Text("İlk kaydını sağ alttaki + ile ekleyebilirsin.", style: TextStyle(color: Colors.black54)),
                       ],
                     ),
                   ),
@@ -282,6 +295,7 @@ class _MoodScreenState extends State<MoodScreen> {
                     avg: avg,
                     std: std,
                     scoreOf: _scoreOf,
+                    navy: navy,
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -292,6 +306,7 @@ class _MoodScreenState extends State<MoodScreen> {
                   child: _MoodTrendLine(
                     entries: monthEntries,
                     scoreOf: _scoreOf,
+                    navy: navy,
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -303,6 +318,7 @@ class _MoodScreenState extends State<MoodScreen> {
                     palette: repo.palette,
                     values: weekdayAvg,
                     typeFromScore: _typeFromScore,
+                    navy: navy,
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -310,7 +326,7 @@ class _MoodScreenState extends State<MoodScreen> {
                 // Seri
                 MoodCard(
                   title: "Seri",
-                  child: _StreakRow(current: currentStreak, best: bestStreak),
+                  child: _StreakRow(current: currentStreak, best: bestStreak, navy: navy),
                 ),
                 const SizedBox(height: 14),
 
@@ -329,6 +345,7 @@ class _MoodScreenState extends State<MoodScreen> {
                   child: _RecentList(
                     entries: recent,
                     palette: repo.palette,
+                    navy: navy,
                     onTap: (e) {
                       if (!mounted) return;
                       setState(() {
@@ -358,12 +375,14 @@ class _WeeklyKpiRow extends StatelessWidget {
   final double avg;
   final double std;
   final int Function(MoodType) scoreOf;
+  final Color navy;
 
   const _WeeklyKpiRow({
     required this.entriesMonth,
     required this.avg,
     required this.std,
     required this.scoreOf,
+    required this.navy,
   });
 
   @override
@@ -411,13 +430,13 @@ class _WeeklyKpiRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        color: Colors.black.withValues(alpha: 0.04),
+        color: navy.withOpacity(0.06),
       ),
       child: Column(
         children: [
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+          Text(value, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: navy)),
           const SizedBox(height: 4),
-          Text(label, style: TextStyle(color: Colors.black.withValues(alpha: 0.55), fontSize: 12)),
+          Text(label, style: TextStyle(color: navy.withOpacity(0.6), fontSize: 10, fontWeight: FontWeight.bold)),
         ],
       ),
     );
@@ -427,8 +446,9 @@ class _WeeklyKpiRow extends StatelessWidget {
 class _MoodTrendLine extends StatelessWidget {
   final List<MoodEntry> entries;
   final int Function(MoodType) scoreOf;
+  final Color navy;
 
-  const _MoodTrendLine({required this.entries, required this.scoreOf});
+  const _MoodTrendLine({required this.entries, required this.scoreOf, required this.navy});
 
   @override
   Widget build(BuildContext context) {
@@ -445,7 +465,7 @@ class _MoodTrendLine extends StatelessWidget {
     return SizedBox(
       height: 140,
       child: CustomPaint(
-        painter: _LinePainter(values: values),
+        painter: _LinePainter(values: values, navy: navy),
         child: const SizedBox.expand(),
       ),
     );
@@ -454,22 +474,23 @@ class _MoodTrendLine extends StatelessWidget {
 
 class _LinePainter extends CustomPainter {
   final List<double> values;
-  _LinePainter({required this.values});
+  final Color navy;
+  _LinePainter({required this.values, required this.navy});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final bg = Paint()..color = Colors.black.withValues(alpha: 0.04);
+    final bg = Paint()..color = navy.withOpacity(0.04);
     final grid = Paint()
-      ..color = Colors.black.withValues(alpha: 0.06)
+      ..color = navy.withOpacity(0.08)
       ..strokeWidth = 1;
 
     final line = Paint()
-      ..color = Colors.black.withValues(alpha: 0.75)
-      ..strokeWidth = 2.2
+      ..color = navy.withOpacity(0.8)
+      ..strokeWidth = 3
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    final dot = Paint()..color = Colors.black.withValues(alpha: 0.8);
+    final dot = Paint()..color = navy;
 
     final r = RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(14));
     canvas.drawRRect(r, bg);
@@ -485,7 +506,7 @@ class _LinePainter extends CustomPainter {
     double normY(double v) => size.height - ((v - minV) / (maxV - minV)) * size.height;
 
     if (values.length == 1) {
-      canvas.drawCircle(Offset(size.width * 0.5, normY(values.first)), 3.2, dot);
+      canvas.drawCircle(Offset(size.width * 0.5, normY(values.first)), 4, dot);
       return;
     }
 
@@ -508,7 +529,7 @@ class _LinePainter extends CustomPainter {
     for (int i = 0; i < values.length; i++) {
       final x = (i / (values.length - 1)) * size.width;
       final y = normY(values[i]);
-      canvas.drawCircle(Offset(x, y), 3.2, dot);
+      canvas.drawCircle(Offset(x, y), 4, dot);
     }
   }
 
@@ -520,11 +541,13 @@ class _WeekdayBars extends StatelessWidget {
   final MoodPalette palette;
   final List<double> values;
   final MoodType Function(int) typeFromScore;
+  final Color navy;
 
   const _WeekdayBars({
     required this.palette,
     required this.values,
     required this.typeFromScore,
+    required this.navy,
   });
 
   @override
@@ -544,7 +567,7 @@ class _WeekdayBars extends StatelessWidget {
 
           final approxScore = (v == 0 ? 3 : v.round()).clamp(1, 5);
           final approxType = typeFromScore(approxScore);
-          final color = palette.colorOf(approxType).withValues(alpha: 0.9);
+          final color = palette.colorOf(approxType).withOpacity(0.9);
 
           return Expanded(
             child: Column(
@@ -563,8 +586,8 @@ class _WeekdayBars extends StatelessWidget {
                   names[i],
                   style: TextStyle(
                     fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black.withValues(alpha: 0.55),
+                    fontWeight: FontWeight.w800,
+                    color: navy.withOpacity(0.6),
                   ),
                 ),
               ],
@@ -579,8 +602,9 @@ class _WeekdayBars extends StatelessWidget {
 class _StreakRow extends StatelessWidget {
   final int current;
   final int best;
+  final Color navy;
 
-  const _StreakRow({required this.current, required this.best});
+  const _StreakRow({required this.current, required this.best, required this.navy});
 
   @override
   Widget build(BuildContext context) {
@@ -598,13 +622,13 @@ class _StreakRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        color: Colors.black.withValues(alpha: 0.04),
+        color: navy.withOpacity(0.06),
       ),
       child: Column(
         children: [
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+          Text(value, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: navy)),
           const SizedBox(height: 4),
-          Text(label, style: TextStyle(color: Colors.black.withValues(alpha: 0.55), fontSize: 12)),
+          Text(label, style: TextStyle(color: navy.withOpacity(0.6), fontSize: 12, fontWeight: FontWeight.bold)),
         ],
       ),
     );
@@ -614,11 +638,13 @@ class _StreakRow extends StatelessWidget {
 class _RecentList extends StatelessWidget {
   final List<MoodEntry> entries;
   final MoodPalette palette;
+  final Color navy;
   final void Function(MoodEntry e) onTap;
 
   const _RecentList({
     required this.entries,
     required this.palette,
+    required this.navy,
     required this.onTap,
   });
 
@@ -636,13 +662,13 @@ class _RecentList extends StatelessWidget {
         for (final e in entries)
           ListTile(
             leading: CircleAvatar(
-              backgroundColor: palette.colorOf(e.mood),
+              backgroundColor: palette.colorOf(e.mood).withOpacity(0.15),
               child: Text(optionOf(e.mood).emoji),
             ),
             title: Text("${e.day.day.toString().padLeft(2, '0')} "
-                "${_monthNameTr(e.day.month)}, ${e.day.year}"),
-            subtitle: Text(optionOf(e.mood).labelTr),
-            trailing: const Icon(Icons.chevron_right),
+                "${_monthNameTr(e.day.month)}, ${e.day.year}", style: TextStyle(fontWeight: FontWeight.w800, color: navy)),
+            subtitle: Text(optionOf(e.mood).labelTr, style: TextStyle(fontWeight: FontWeight.bold, color: navy.withOpacity(0.5))),
+            trailing: Icon(Icons.chevron_right_rounded, color: navy),
             onTap: () => onTap(e),
           ),
       ],

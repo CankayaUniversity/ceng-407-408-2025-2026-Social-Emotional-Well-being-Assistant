@@ -685,12 +685,21 @@ Rules:
 
   @override
   Widget build(BuildContext context) {
+    const navy = Color(0xFF2B3A67);
+    const mint = Color(0xFFD6E5E3);
+    const lightGrey = Color(0xFFE5E5E5);
+    const gold = Color(0xFFFFE6A7);
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FB),
       appBar: AppBar(
-        title: const Text("AI Chat"),
+        backgroundColor: navy,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: const Text("AI Chat", style: TextStyle(fontWeight: FontWeight.w900)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings),
+            icon: const Icon(Icons.settings, color: Colors.white),
             onPressed: () {
               Navigator.push(
                 context,
@@ -705,127 +714,150 @@ Rules:
         child: Text(
           _error!,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: Colors.red),
+          style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
         ),
       )
           : Column(
         children: [
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: _messages.length,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              itemCount: _messages.length + 1,
               itemBuilder: (context, index) {
-                final msg = _messages[index];
-                return Align(
-                  alignment: msg.isUser
-                      ? Alignment.centerRight
-                      : Alignment.centerLeft,
-                  child: Column(
-                    crossAxisAlignment: msg.isUser
-                        ? CrossAxisAlignment.end
-                        : CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        margin: const EdgeInsets.symmetric(vertical: 4),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: msg.isUser
-                              ? Colors.teal.shade200
-                              : Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(msg.text),
+                if (index == 0) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.03),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          )
+                        ],
                       ),
-                      // if (msg.emotion != null)
-                      //   Padding(
-                      //     padding: const EdgeInsets.only(bottom: 6),
-                      //     child: Chip(
-                      //       label: Text("Detected emotion: ${msg.emotion}"),
-                      //     ),
-                      //   ),
-                      // // Display book recommendations
-                      // if (msg.bookRecommendations.isNotEmpty)
-                      //   Padding(
-                      //     padding: const EdgeInsets.only(top: 8, bottom: 8),
-                      //     child: Container(
-                      //       decoration: BoxDecoration(
-                      //         border: Border.all(color: Colors.blue.shade300),
-                      //         borderRadius: BorderRadius.circular(8),
-                      //       ),
-                      //       padding: const EdgeInsets.all(12),
-                      //       child: Column(
-                      //         crossAxisAlignment: CrossAxisAlignment.start,
-                      //         children: [
-                      //           const Text(
-                      //             "Books for you:",
-                      //             style: TextStyle(
-                      //                 fontWeight: FontWeight.bold,
-                      //                 fontSize: 14),
-                      //           ),
-                      //           const SizedBox(height: 8),
-                      //           ...msg.bookRecommendations.asMap().entries.map(
-                      //                 (entry) {
-                      //               final idx = entry.key;
-                      //               final book = entry.value;
-                      //               return Padding(
-                      //                 padding:
-                      //                 const EdgeInsets.symmetric(vertical: 4),
-                      //                 child: Text(
-                      //                   '${idx + 1}. ${book['title']}',
-                      //                   style: const TextStyle(fontSize: 12),
-                      //                 ),
-                      //               );
-                      //             },
-                      //           ),
-                      //         ],
-                      //       ),
-                      //     ),
-                      //   ),
-                      // // Display movie recommendations
-                      // if (msg.movieRecommendations.isNotEmpty)
-                      //   Padding(
-                      //     padding: const EdgeInsets.only(top: 8, bottom: 8),
-                      //     child: Container(
-                      //       decoration: BoxDecoration(
-                      //         border: Border.all(color: Colors.purple.shade300),
-                      //         borderRadius: BorderRadius.circular(8),
-                      //       ),
-                      //       padding: const EdgeInsets.all(12),
-                      //       child: Column(
-                      //         crossAxisAlignment: CrossAxisAlignment.start,
-                      //         children: [
-                      //           const Text(
-                      //             "Movies for you:",
-                      //             style: TextStyle(
-                      //                 fontWeight: FontWeight.bold,
-                      //                 fontSize: 14),
-                      //           ),
-                      //           const SizedBox(height: 8),
-                      //           ...msg.movieRecommendations.asMap().entries.map(
-                      //                 (entry) {
-                      //               final idx = entry.key;
-                      //               final movie = entry.value;
-                      //               return Padding(
-                      //                 padding:
-                      //                 const EdgeInsets.symmetric(vertical: 4),
-                      //                 child: Text(
-                      //                   '${idx + 1}. ${movie['title']}',
-                      //                   style: const TextStyle(fontSize: 12),
-                      //                 ),
-                      //               );
-                      //             },
-                      //           ),
-                      //         ],
-                      //       ),
-                      //     ),
-                      //   ),
-                      if (msg.emotion != null && !msg.isUser)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8, top: 4),
-                          child: Chip(
-                            label: Text(
-                                'Emotion: ${msg.emotion} (Risk: ${msg.riskLevel?.toString().split('.').last})'),
-                            backgroundColor: Colors.blueGrey.shade100,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Merhaba!",
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                    color: navy,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "Asistan ile bugün nasıl hissediyorsun?",
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: navy.withOpacity(0.5),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: mint,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Icon(Icons.auto_awesome_rounded, color: navy, size: 30),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                final msg = _messages[index - 1];
+                final isMe = msg.isUser;
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+                    children: [
+                      if (!isMe)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 8, top: 4),
+                          child: CircleAvatar(
+                            radius: 16,
+                            backgroundColor: navy,
+                            child: Icon(Icons.smart_toy_rounded, size: 18, color: gold),
+                          ),
+                        ),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: isMe ? navy : Colors.white,
+                                borderRadius: BorderRadius.only(
+                                  topLeft: const Radius.circular(20),
+                                  topRight: const Radius.circular(20),
+                                  bottomLeft: Radius.circular(isMe ? 20 : 4),
+                                  bottomRight: Radius.circular(isMe ? 4 : 20),
+                                ),
+                                border: isMe ? null : Border.all(color: navy.withOpacity(0.05)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.03),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  )
+                                ],
+                              ),
+                              child: Text(
+                                msg.text,
+                                style: TextStyle(
+                                  color: isMe ? Colors.white : navy,
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 15,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                            if (!isMe && msg.emotion != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8, left: 4),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: gold.withOpacity(0.3),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: gold, width: 0.5),
+                                  ),
+                                  child: Text(
+                                    '${msg.emotion} (${msg.riskLevel?.toString().split('.').last})',
+                                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: navy),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (isMe)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 8, top: 4),
+                          child: CircleAvatar(
+                            radius: 16,
+                            backgroundColor: gold,
+                            child: Icon(Icons.person_rounded, size: 18, color: navy),
                           ),
                         ),
                     ],
@@ -835,27 +867,56 @@ Rules:
             ),
           ),
           if (_isLoading)
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: CircularProgressIndicator(),
+            const Padding(
+              padding: EdgeInsets.all(8),
+              child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(navy)),
             ),
-          Padding(
-            padding: const EdgeInsets.all(8),
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 20,
+                  offset: const Offset(0, -5),
+                )
+              ],
+            ),
             child: Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    enabled: !_isLoading,
-                    decoration: const InputDecoration(
-                      hintText: "Type your message...",
-                      border: OutlineInputBorder(),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0F2F5),
+                      borderRadius: BorderRadius.circular(25),
+                    ),
+                    child: TextField(
+                      controller: _controller,
+                      enabled: !_isLoading,
+                      style: TextStyle(color: navy, fontWeight: FontWeight.w600),
+                      decoration: InputDecoration(
+                        hintText: "Bir mesaj yazın...",
+                        hintStyle: TextStyle(color: navy.withOpacity(0.3)),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      ),
                     ),
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.send),
-                  onPressed: _isLoading ? null : _sendMessage,
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: _isLoading ? null : _sendMessage,
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: const BoxDecoration(
+                      color: navy,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.send_rounded, color: gold, size: 20),
+                  ),
                 )
               ],
             ),

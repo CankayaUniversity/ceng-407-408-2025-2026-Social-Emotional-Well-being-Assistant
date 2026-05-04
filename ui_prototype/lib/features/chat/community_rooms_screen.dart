@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ui_prototype/core/api/api_client.dart';
 import 'package:ui_prototype/core/api/token_store.dart';
 import 'package:ui_prototype/core/config/app_config.dart';
 import 'package:ui_prototype/core/services/chat_service.dart';
@@ -158,14 +159,12 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
           : DateTime.fromMillisecondsSinceEpoch(0);
 
       try {
-        final response = await http.get(
-          Uri.parse('$backendBaseUrl/api/community/messages?userId=$_userId&room=$room'),
-        );
+        final response = await ApiClient.get('/community/messages?userId=$_userId&room=$room');
         if (response.statusCode == 200) {
           final decoded = jsonDecode(response.body);
-          final List<dynamic> messages = decoded['messages'] is List ? decoded['messages'] : [];
+          final List<dynamic> messages = (decoded is List) ? decoded : (decoded['messages'] is List ? decoded['messages'] : []);
           for (final m in messages) {
-            final createdAt = DateTime.tryParse(m['createdAt'] ?? '');
+            final createdAt = DateTime.tryParse(m['createdAt']?.toString() ?? '');
             final senderId = int.tryParse(m['userId']?.toString() ?? '');
             if (senderId != _userId && createdAt != null && createdAt.isAfter(lastSeen)) {
               totalNew++;
@@ -314,7 +313,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   Future<void> _loadRooms() async {
     _safeSetState(() { _loadingRooms = true; });
     try {
-      final response = await http.get(Uri.parse('$backendBaseUrl/api/community/rooms'));
+      final response = await ApiClient.get('/community/rooms');
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final decoded = jsonDecode(response.body);
         List<String> rooms = [];
@@ -379,32 +378,34 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   Future<void> _refreshMessagesForRoom(String room) async {
     if (_userId == null) return;
     try {
-      final response = await http.get(Uri.parse('$backendBaseUrl/api/community/messages?userId=$_userId&room=$room'));
+      final response = await ApiClient.get('/community/messages?userId=$_userId&room=$room');
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
-        final List<dynamic> messages = decoded['messages'] is List ? decoded['messages'] : [];
+        final List<dynamic> messages = (decoded is List) ? decoded : (decoded['messages'] is List ? decoded['messages'] : []);
         _safeSetState(() {
           _items.clear();
           for (final item in messages) {
             _items.add(ChatItem(
               type: ChatItemType.message,
-              username: (item['username'] ?? '').toString(),
+              username: (item['username'] ?? 'Bilinmeyen').toString(),
               message: (item['message'] ?? '').toString(),
               room: room, // Populate room
-              createdAt: DateTime.tryParse((item['createdAt'] ?? '').toString()) ?? DateTime.now(),
-              userId: item['userId'],
-              socketId: item['socketId'],
+              createdAt: DateTime.tryParse(item['createdAt']?.toString() ?? '') ?? DateTime.now(),
+              userId: int.tryParse(item['userId']?.toString() ?? ''),
+              socketId: item['socketId']?.toString(),
             ));
           }
         });
       }
-    } catch (e) {}
+    } catch (e) {
+      debugPrint('REFRESH MESSAGES ERROR: $e');
+    }
   }
 
   Future<void> _joinRoom(String room, {bool isNewRoom = false}) async {
     if (_joiningRoom || _leavingRoom) return;
     final trimmedRoom = room.trim();
-    if (trimmedRoom.isEmpty) return;
+    if (trimmedRoom.isEmpty || _userId == null) return;
 
     // ALWAYS inform the service that we are switching/joining this room
     _chatService.joinRoom(trimmedRoom, _userId!, _chatUsername!);
@@ -418,16 +419,12 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     _joiningRoom = true;
     try {
       // 1. Tell the backend we are joining (Critical for message persistence)
-      await http.post(
-        Uri.parse('$backendBaseUrl/api/community/join'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'userId': _userId, 'room': trimmedRoom}),
-      );
+      await ApiClient.post('/community/join', {'userId': _userId, 'room': trimmedRoom});
 
       // 2. Fetch historical messages
-      final msgRes = await http.get(Uri.parse('$backendBaseUrl/api/community/messages?userId=$_userId&room=$trimmedRoom'));
+      final msgRes = await ApiClient.get('/community/messages?userId=$_userId&room=$trimmedRoom');
       final decoded = jsonDecode(msgRes.body);
-      final List<dynamic> messages = decoded['messages'] is List ? decoded['messages'] : [];
+      final List<dynamic> messages = (decoded is List) ? decoded : (decoded['messages'] is List ? decoded['messages'] : []);
 
       _safeSetState(() {
         _currentRoom = trimmedRoom;
@@ -437,12 +434,12 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
         for (final item in messages) {
           _items.add(ChatItem(
             type: ChatItemType.message,
-            username: item['username'],
-            message: item['message'],
+            username: (item['username'] ?? 'Bilinmeyen').toString(),
+            message: (item['message'] ?? '').toString(),
             room: trimmedRoom, // Populate room
-            createdAt: DateTime.tryParse(item['createdAt'] ?? '') ?? DateTime.now(),
-            userId: item['userId'],
-            socketId: item['socketId'],
+            createdAt: DateTime.tryParse(item['createdAt']?.toString() ?? '') ?? DateTime.now(),
+            userId: int.tryParse(item['userId']?.toString() ?? ''),
+            socketId: item['socketId']?.toString(),
           ));
         }
         _filteredRooms = List<String>.from(_allRooms);
@@ -471,11 +468,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     _leavingRoom = true;
     try {
       // 1. Tell backend we are leaving
-      await http.post(
-        Uri.parse('$backendBaseUrl/api/community/leave'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'userId': _userId, 'room': roomToLeave}),
-      );
+      await ApiClient.post('/community/leave', {'userId': _userId, 'room': roomToLeave});
 
       // 2. Tell socket service
       _chatService.leaveRoom(roomToLeave, _userId!, _chatUsername!);
@@ -574,7 +567,11 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loadingUser) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    const navy = Color(0xFF2B3A67);
+    const mint = Color(0xFFD6E5E3);
+    const gold = Color(0xFFFFE6A7);
+
+    if (_loadingUser) return const Scaffold(backgroundColor: mint, body: Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(navy))));
 
     return WillPopScope(
       onWillPop: () async {
@@ -582,81 +579,132 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
         return true;
       },
       child: Scaffold(
+        backgroundColor: const Color(0xFFF8F9FB),
         appBar: AppBar(
+          backgroundColor: navy,
+          foregroundColor: Colors.white,
           leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () { if (_joined) _backToRoomBrowser(); else Navigator.pop(context); }),
-          title: Text(_joined ? (_currentRoom ?? 'Chat') : 'Community Rooms'),
+          title: Text(_joined ? (_currentRoom ?? 'Chat') : 'Community Rooms', style: const TextStyle(fontWeight: FontWeight.w900)),
           actions: [
             if (_joined && !_currentRoom!.startsWith('private-'))
               IconButton(
-                icon: const Icon(Icons.people),
+                icon: const Icon(Icons.people, color: gold),
                 onPressed: _showRoomUsers,
               ),
-            Padding(padding: const EdgeInsets.only(right: 12), child: Center(child: Text(_connected ? 'ÇEVRİMİÇİ' : 'ÇEVRİMDIŞI', style: TextStyle(color: _connected ? Colors.green : Colors.red, fontWeight: FontWeight.bold, fontSize: 10)))),
-            Padding(padding: const EdgeInsets.only(right: 16), child: Center(child: Text(_chatUsername ?? '', style: const TextStyle(fontSize: 12)))),
+            Padding(padding: const EdgeInsets.only(right: 12), child: Center(child: Text(_connected ? 'ÇEVRİMİÇİ' : 'ÇEVRİMDIŞI', style: TextStyle(color: _connected ? Colors.greenAccent : Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 10)))),
+            Padding(padding: const EdgeInsets.only(right: 16), child: Center(child: Text(_chatUsername ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: gold)))),
           ],
         ),
-        body: _joined ? _buildChatRoom() : _buildRoomBrowser(),
+        body: _joined ? _buildChatRoom(navy, mint, gold) : _buildRoomBrowser(navy, mint, gold),
       ),
     );
   }
 
-  Widget _buildStatusBadge(String room) {
+  Widget _buildStatusBadge(String room, Color navy, Color gold) {
     final status = _getRoomStatus(room);
 
     if (status == RoomMembershipStatus.joined) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.green.shade300)),
-        child: Text('Joined', style: TextStyle(color: Colors.green.shade700, fontSize: 12, fontWeight: FontWeight.w600)),
+        decoration: BoxDecoration(color: navy.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: navy.withOpacity(0.3))),
+        child: Text('Joined', style: TextStyle(color: navy, fontSize: 12, fontWeight: FontWeight.w900)),
       );
     }
 
     if (status == RoomMembershipStatus.left) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.red.shade300)),
-        child: Text('Left', style: TextStyle(color: Colors.red.shade700, fontSize: 12, fontWeight: FontWeight.w600)),
+        decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.red.withOpacity(0.3))),
+        child: Text('Left', style: TextStyle(color: Colors.red.shade700, fontSize: 12, fontWeight: FontWeight.w900)),
       );
     }
 
     return const SizedBox.shrink();
   }
 
-  Widget _buildRoomBrowser() {
+  Widget _buildRoomBrowser(Color navy, Color mint, Color gold) {
     return Column(
       children: [
-        Padding(padding: const EdgeInsets.fromLTRB(12, 12, 12, 8), child: TextField(controller: _searchController, onChanged: _filterRooms, decoration: InputDecoration(hintText: 'Oda ara...', prefixIcon: const Icon(Icons.search), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(12)),
-            child: Column(
-              children: [
-                TextField(controller: _createRoomController, decoration: const InputDecoration(hintText: 'Yeni oda konusu...')),
-                Align(alignment: Alignment.centerRight, child: ElevatedButton(onPressed: _createRoom, child: const Text('Create Room'))),
-              ],
-            ),
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: _filterRooms,
+                  style: TextStyle(color: navy, fontWeight: FontWeight.bold),
+                  decoration: InputDecoration(
+                    hintText: 'Oda ara...',
+                    filled: true,
+                    fillColor: Colors.white,
+                    prefixIcon: Icon(Icons.search, color: navy.withOpacity(0.4)),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  )
+                ),
+              ),
+              const SizedBox(width: 12),
+              GestureDetector(
+                onTap: _createRoom,
+                child: Container(
+                  height: 48,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: navy,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.add_rounded, color: gold, size: 20),
+                      const SizedBox(width: 4),
+                      const Text("Oda Oluştur", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
+
         const SizedBox(height: 10),
         Expanded(
-          child: _loadingRooms ? const Center(child: CircularProgressIndicator()) : ListView.builder(
+          child: _loadingRooms ? Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(navy))) : ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: _filteredRooms.length,
             itemBuilder: (context, index) {
               final room = _filteredRooms[index];
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: navy.withOpacity(0.05)),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+                ),
                 child: ListTile(
-                  leading: const Icon(Icons.groups),
-                  title: Text(room),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  leading: Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(color: navy.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+                    child: Icon(Icons.groups_rounded, color: navy),
+                  ),
+                  title: Text(room, style: TextStyle(fontWeight: FontWeight.w900, color: navy, fontSize: 16)),
+                  subtitle: Row(
                     children: [
-                      _buildStatusBadge(room),
+                      Text("Aktif Grup", style: TextStyle(fontWeight: FontWeight.w700, color: navy.withOpacity(0.4), fontSize: 12)),
                       const SizedBox(width: 8),
-                      const Icon(Icons.arrow_forward_ios, size: 16),
+                      _buildStatusBadge(room, navy, gold),
                     ],
+                  ),
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: navy.withOpacity(0.1)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text("Katıl", style: TextStyle(color: navy, fontWeight: FontWeight.w900, fontSize: 13)),
                   ),
                   onTap: () => _joinRoom(room),
                 ),
@@ -668,50 +716,111 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     );
   }
 
-  Widget _buildChatRoom() {
+  Widget _categoryChip(String label, bool isSelected, Color navy, Color gold) {
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: isSelected ? navy : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isSelected ? navy : navy.withOpacity(0.1)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? Colors.white : navy.withOpacity(0.6),
+          fontWeight: FontWeight.w800,
+          fontSize: 13,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatRoom(Color navy, Color mint, Color gold) {
     return Column(
       children: [
         Expanded(
           child: ListView.builder(
+            padding: const EdgeInsets.all(12),
             itemCount: _items.length,
             itemBuilder: (context, index) {
               final item = _items[index];
               if (item.type == ChatItemType.system) {
                 return Center(
                   child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(item.message ?? '', style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
+                    padding: const EdgeInsets.all(12.0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      decoration: BoxDecoration(color: navy.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                      child: Text(item.message ?? '', style: TextStyle(fontStyle: FontStyle.italic, color: navy.withOpacity(0.7), fontSize: 12, fontWeight: FontWeight.w600)),
+                    ),
                   ),
                 );
               }
               final isMe = item.userId == _userId;
-              return ListTile(
-                title: Text(item.username ?? 'Bilinmeyen', style: TextStyle(fontWeight: isMe ? FontWeight.bold : FontWeight.normal)),
-                subtitle: Text(item.message ?? ''),
-                trailing: Text(
-                  '${item.createdAt.hour}:${item.createdAt.minute.toString().padLeft(2, '0')}',
-                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+              return Align(
+                alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  padding: const EdgeInsets.all(12),
+                  constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                  decoration: BoxDecoration(
+                    color: isMe ? navy : Colors.white,
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(16),
+                      topRight: const Radius.circular(16),
+                      bottomLeft: isMe ? const Radius.circular(16) : Radius.zero,
+                      bottomRight: isMe ? Radius.zero : const Radius.circular(16),
+                    ),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5, offset: const Offset(0, 2))],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (!isMe) Text(item.username ?? 'Bilinmeyen', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.blueGrey)),
+                      Text(item.message ?? '', style: TextStyle(color: isMe ? Colors.white : navy, fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 2),
+                      Align(
+                        alignment: Alignment.bottomRight,
+                        child: Text(
+                          '${item.createdAt.hour}:${item.createdAt.minute.toString().padLeft(2, '0')}',
+                          style: TextStyle(fontSize: 9, color: isMe ? Colors.white70 : Colors.grey, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _messageController,
-                  decoration: const InputDecoration(hintText: 'Mesajınızı yazın...'),
-                  onSubmitted: (_) => _sendMessage(),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+          child: SafeArea(
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    decoration: InputDecoration(
+                      hintText: 'Mesajınızı yazın...',
+                      hintStyle: TextStyle(color: navy.withOpacity(0.4)),
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    ),
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
                 ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.send),
-                onPressed: _sendMessage,
-              ),
-            ],
+                const SizedBox(width: 8),
+                CircleAvatar(
+                  backgroundColor: navy,
+                  child: IconButton(icon: Icon(Icons.send_rounded, color: gold, size: 20), onPressed: _sendMessage),
+                ),
+              ],
+            ),
           ),
         ),
       ],

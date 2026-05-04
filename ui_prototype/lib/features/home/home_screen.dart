@@ -191,16 +191,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const navy = Color(0xFF2B3A67);
+    const mint = Color(0xFFD6E5E3);
+    const lightGrey = Color(0xFFE5E5E5);
+    const gold = Color(0xFFFFE6A7);
+
     final day = _key(_selectedDay ?? _focusedDay);
     final done = _doneCount(day);
     final total = kHomeHabits.length;
+    final double percent = total == 0 ? 0 : (done / total);
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text("Home"),
+        backgroundColor: navy,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: const Text("Home", style: TextStyle(fontWeight: FontWeight.w900)),
+        centerTitle: false,
         actions: [
           IconButton(
-            icon: const Icon(Icons.insights_rounded),
+            icon: const Icon(Icons.insights_rounded, color: gold),
             onPressed: () {
               StatsSheet.open(
                 context: context,
@@ -218,64 +229,153 @@ class _HomeScreenState extends State<HomeScreen> {
                     .toList(),
               );
             },
-          )
+          ),
         ],
       ),
       body: Column(
         children: [
+          // Month Label and Horizontal Picker
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Text(
+                  DateFormat("MMMM yyyy", "tr_TR").format(_focusedDay),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: navy),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.chevron_left_rounded, color: navy),
+                  onPressed: () {
+                    setState(() {
+                      _focusedDay = DateTime(_focusedDay.year, _focusedDay.month - 1);
+                    });
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right_rounded, color: navy),
+                  onPressed: () {
+                    setState(() {
+                      _focusedDay = DateTime(_focusedDay.year, _focusedDay.month + 1);
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
           TableCalendar(
             firstDay: DateTime.utc(2022, 1, 1),
             lastDay: DateTime.utc(2030, 12, 31),
             focusedDay: _focusedDay,
-            calendarFormat: _calendarFormat,
-            headerStyle: const HeaderStyle(formatButtonVisible: false),
+            calendarFormat: CalendarFormat.month,
+            headerVisible: false,
+            daysOfWeekStyle: const DaysOfWeekStyle(
+              weekdayStyle: TextStyle(color: navy, fontWeight: FontWeight.bold),
+              weekendStyle: TextStyle(color: navy, fontWeight: FontWeight.bold),
+            ),
+            calendarStyle: CalendarStyle(
+              isTodayHighlighted: false,
+              selectedDecoration: BoxDecoration(color: navy, borderRadius: BorderRadius.circular(12)),
+              defaultDecoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+              weekendDecoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+              selectedTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              defaultTextStyle: const TextStyle(color: navy, fontWeight: FontWeight.bold),
+              weekendTextStyle: const TextStyle(color: navy, fontWeight: FontWeight.bold),
+              markersMaxCount: 5,
+              markerDecoration: const BoxDecoration(color: navy, shape: BoxShape.circle),
+            ),
             selectedDayPredicate: (d) => isSameDay(_selectedDay, d),
-
-            // ✅ gün seçince Hive’dan yükle
             onDaySelected: (s, f) async {
               final selected = _key(s);
               setState(() {
                 _selectedDay = selected;
-                _focusedDay = _key(f);
+                _focusedDay = f;
               });
-
               await _loadDay(selected);
-
               if (!mounted) return;
               setState(() {});
             },
-
-            eventLoader: (d) =>
-            _doneCount(d) == 0 ? [] : List.generate(_doneCount(d), (_) => "x"),
-          ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        DateFormat("d MMMM, EEEE", "tr_TR").format(day),
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+            onPageChanged: (f) {
+              setState(() {
+                _focusedDay = f;
+              });
+            },
+            calendarBuilders: CalendarBuilders(
+              markerBuilder: (context, date, events) {
+                final count = _doneCount(date);
+                if (count == 0) return const SizedBox.shrink();
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    count,
+                    (index) => Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 1),
+                      width: 5,
+                      height: 5,
+                      decoration: const BoxDecoration(
+                        color: navy,
+                        shape: BoxShape.circle,
                       ),
                     ),
-                    Pill(
-                      text: total == 0 ? "Boş gün" : "$done/$total",
-                      icon: total == 0 ? Icons.event_busy_rounded : Icons.check_rounded,
-                    ),
-                  ],
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 20),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              children: [
+                // Progress Card
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: navy,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(color: navy.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))
+                    ],
+                  ),
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        right: -20,
+                        top: -20,
+                        child: Icon(Icons.eco_rounded, size: 100, color: Colors.white.withOpacity(0.1)),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "GÜNLÜK İLERLEME",
+                            style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 12),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            "%${(percent * 100).toInt()}",
+                            style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "Bugün $done/$total alışkanlık tamamlandı.",
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 24),
                 GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: kHomeHabits.length,
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 1.35,
+                    mainAxisSpacing: 16,
+                    crossAxisSpacing: 16,
+                    childAspectRatio: 0.95,
                   ),
                   itemBuilder: (_, i) {
                     final h = kHomeHabits[i];
@@ -300,13 +400,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                   },
                 ),
-                const SizedBox(height: 14),
-                SoftCard(
-                  title: "Daily Summary",
-                  subtitle: total == 0
-                      ? "Bugün için alışkanlık yok."
-                      : "$done of $total completed. ${total - done} left to go!",
-                ),
+                const SizedBox(height: 30),
               ],
             ),
           ),

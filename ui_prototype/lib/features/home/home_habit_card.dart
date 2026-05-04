@@ -22,57 +22,61 @@ class HomeHabitCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = _readableTextColor(color);
+    const navy = Color(0xFF2B3A67);
 
     return InkWell(
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(22),
       onTap: onTap,
       onLongPress: onLongPress,
       child: Container(
         decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: const [
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: navy.withOpacity(0.05)),
+          boxShadow: [
             BoxShadow(
-              blurRadius: 14,
-              offset: Offset(0, 8),
-              color: Color(0x1A000000),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+              color: navy.withOpacity(0.05),
             )
           ],
         ),
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                // ✅ gerçek emoji (kare ikon yok)
+                // Small colored emoji box
                 Container(
-                  width: 34,
-                  height: 34,
+                  width: 32,
+                  height: 32,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(.28),
-                    borderRadius: BorderRadius.circular(12),
+                    color: color.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   alignment: Alignment.center,
                   child: Text(
                     emoji,
-                    style: const TextStyle(fontSize: 18),
+                    style: const TextStyle(fontSize: 16),
                   ),
                 ),
                 const Spacer(),
+                // Circle checkmark
                 Container(
-                  width: 28,
-                  height: 28,
+                  width: 24,
+                  height: 24,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(.28),
+                    color: done ? color.withOpacity(0.2) : Colors.transparent,
                     shape: BoxShape.circle,
+                    border: Border.all(
+                      color: done ? color : navy.withOpacity(0.1),
+                      width: 1.5,
+                    ),
                   ),
-                  child: Icon(
-                    done ? Icons.check_rounded : Icons.circle_outlined,
-                    color: fg,
-                    size: 18,
-                  ),
+                  child: done
+                      ? Icon(Icons.check_rounded, color: color, size: 16)
+                      : null,
                 ),
               ],
             ),
@@ -81,49 +85,24 @@ class HomeHabitCard extends StatelessWidget {
               title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: fg,
+              style: const TextStyle(
+                color: navy,
                 fontWeight: FontWeight.w900,
-                fontSize: 16,
+                fontSize: 15,
               ),
             ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Text(
-                  "Günlük",
-                  style: TextStyle(
-                    color: fg.withOpacity(.85),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const Spacer(),
-                if (timeText != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(.28),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      timeText!,
-                      style: TextStyle(
-                        color: fg,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-              ],
+            const SizedBox(height: 4),
+            Text(
+              done ? "Tamamlandı" : (timeText ?? "Devam ediyor"),
+              style: TextStyle(
+                color: done ? color.withOpacity(0.7) : navy.withOpacity(0.4),
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+              ),
             ),
           ],
         ),
       ),
     );
   }
-}
-
-Color _readableTextColor(Color bg) {
-  final l = (0.2126 * bg.red + 0.7152 * bg.green + 0.0722 * bg.blue) / 255.0;
-  return l > 0.65 ? Colors.black87 : Colors.white;
 }

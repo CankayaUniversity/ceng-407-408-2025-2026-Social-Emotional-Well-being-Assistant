@@ -14,12 +14,20 @@ class SoftCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const navy = Color(0xFF2B3A67);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(.03),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.black12),
+        boxShadow: [
+          BoxShadow(
+            color: navy.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
+        border: Border.all(color: navy.withOpacity(0.05)),
       ),
       child: Row(
         children: [
@@ -27,11 +35,11 @@ class SoftCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w900, color: navy)),
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w600),
+                  style: TextStyle(color: navy.withOpacity(0.6), fontWeight: FontWeight.w600),
                 ),
               ],
             ),
