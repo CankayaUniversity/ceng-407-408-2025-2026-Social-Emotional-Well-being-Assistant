@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
+import '../../../core/services/notification_service.dart';
 import '../data/home_store.dart';
 import 'medicine_models.dart';
 
@@ -14,10 +18,24 @@ class MedicineScreen extends StatefulWidget {
 class _MedicineScreenState extends State<MedicineScreen> {
   List<MedicinePlan> _plans = [];
 
+  Timer? _medicineCheckTimer;
+  final Set<String> _notifiedDoseKeys = {};
+
   @override
   void initState() {
     super.initState();
     _loadData();
+
+    _medicineCheckTimer = Timer.periodic(
+      const Duration(seconds: 5),
+          (_) => _checkMedicineTimes(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _medicineCheckTimer?.cancel();
+    super.dispose();
   }
 
   void _loadData() {
@@ -47,6 +65,41 @@ class _MedicineScreenState extends State<MedicineScreen> {
   String _two(int n) => n.toString().padLeft(2, '0');
   String _hhmm(TimeOfDay t) => "${_two(t.hour)}:${_two(t.minute)}";
 
+  Future<void> _checkMedicineTimes() async {
+    final now = DateTime.now();
+    final currentHHmm = "${_two(now.hour)}:${_two(now.minute)}";
+
+    debugPrint("Checking medicine time: $currentHHmm");
+
+    for (final plan in _plans) {
+      for (int i = 0; i < plan.doses.length; i++) {
+        final dose = plan.doses[i];
+        final key = "${plan.id}-$i-${now.year}-${now.month}-${now.day}-$currentHHmm";
+
+        if (dose.timeHHmm == currentHHmm &&
+            dose.taken == false &&
+            !_notifiedDoseKeys.contains(key)) {
+          _notifiedDoseKeys.add(key);
+
+          debugPrint("MEDICINE TIME MATCHED: ${plan.name}");
+
+          await NotificationService().showNotification(
+            id: plan.id.hashCode + i,
+            title: 'İlaç zamanı 💊',
+            body: '${plan.name} alma saatin geldi.',
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _cancelNotificationsForPlan(MedicinePlan plan) async {
+    for (int i = 0; i < plan.doses.length; i++) {
+      final notificationId = plan.id.hashCode + i;
+      await NotificationService().cancelMedicineNotification(notificationId);
+    }
+  }
+
   Future<void> _addMedicine() async {
     final plan = await showModalBottomSheet<MedicinePlan>(
       context: context,
@@ -61,6 +114,13 @@ class _MedicineScreenState extends State<MedicineScreen> {
 
     setState(() => _plans.add(plan));
     await _saveData();
+
+    await _checkMedicineTimes();
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("İlaç kaydedildi, saatinde bildirim verilecek.")),
+    );
   }
 
   @override
@@ -89,8 +149,10 @@ class _MedicineScreenState extends State<MedicineScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(dayText,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+              Text(
+                dayText,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              ),
               const SizedBox(height: 10),
 
               if (_allTakenToday)
@@ -108,7 +170,10 @@ class _MedicineScreenState extends State<MedicineScreen> {
                       SizedBox(width: 8),
                       Text(
                         "TAMAMLANDI",
-                        style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF2E7D32)),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF2E7D32),
+                        ),
                       ),
                     ],
                   ),
@@ -127,7 +192,10 @@ class _MedicineScreenState extends State<MedicineScreen> {
                   ),
                   child: const Text(
                     "Bugün için ilaç yok. Sağ üstten + ile ekle.",
-                    style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      color: Colors.black54,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 )
               else
@@ -186,7 +254,9 @@ class _MedicineScreenState extends State<MedicineScreen> {
                                   dense: true,
                                   value: med.doses[i].taken,
                                   onChanged: (v) async {
-                                    setState(() => med.doses[i].taken = v ?? false);
+                                    setState(() {
+                                      med.doses[i].taken = v ?? false;
+                                    });
                                     await _saveData();
                                   },
                                   controlAffinity: ListTileControlAffinity.leading,
@@ -208,6 +278,10 @@ class _MedicineScreenState extends State<MedicineScreen> {
                               alignment: Alignment.centerRight,
                               child: TextButton.icon(
                                 onPressed: () async {
+                                  final removedPlan = _plans[index];
+
+                                  await _cancelNotificationsForPlan(removedPlan);
+
                                   setState(() => _plans.removeAt(index));
                                   await _saveData();
                                 },
@@ -230,7 +304,7 @@ class _MedicineScreenState extends State<MedicineScreen> {
 }
 
 /* ============================
-   Add Medicine Sheet (Result döner)
+   Add Medicine Sheet
    ============================ */
 
 class _AddMedicineSheet extends StatefulWidget {
@@ -265,18 +339,22 @@ class _AddMedicineSheetState extends State<_AddMedicineSheet> {
       context: context,
       initialTime: _times[i] ?? TimeOfDay.now(),
     );
+
     if (picked == null) return;
+
     setState(() => _times[i] = picked);
   }
 
   void _save() {
     final name = _nameCtrl.text.trim();
+
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("İlaç adı boş olamaz.")),
       );
       return;
     }
+
     if (_times.any((t) => t == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Lütfen tüm vakitleri seç.")),
@@ -301,7 +379,12 @@ class _AddMedicineSheetState extends State<_AddMedicineSheet> {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
 
     return Padding(
-      padding: EdgeInsets.only(left: 12, right: 12, bottom: bottom + 12, top: 12),
+      padding: EdgeInsets.only(
+        left: 12,
+        right: 12,
+        bottom: bottom + 12,
+        top: 12,
+      ),
       child: Material(
         type: MaterialType.transparency,
         child: Container(
@@ -333,8 +416,10 @@ class _AddMedicineSheetState extends State<_AddMedicineSheet> {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      const Text("İlaç ekle",
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                      const Text(
+                        "İlaç ekle",
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                      ),
                       const Spacer(),
                       IconButton(
                         onPressed: () => Navigator.pop(context),
@@ -348,7 +433,9 @@ class _AddMedicineSheetState extends State<_AddMedicineSheet> {
                     decoration: InputDecoration(
                       labelText: "İlaç adı",
                       prefixText: "💊 ",
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -356,8 +443,10 @@ class _AddMedicineSheetState extends State<_AddMedicineSheet> {
                   Row(
                     children: [
                       const Expanded(
-                        child: Text("Günde kaç kere?",
-                            style: TextStyle(fontWeight: FontWeight.w800)),
+                        child: Text(
+                          "Günde kaç kere?",
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -370,7 +459,12 @@ class _AddMedicineSheetState extends State<_AddMedicineSheet> {
                           value: _timesPerDay,
                           underline: const SizedBox.shrink(),
                           items: List.generate(8, (i) => i + 1)
-                              .map((v) => DropdownMenuItem(value: v, child: Text("$v")))
+                              .map(
+                                (v) => DropdownMenuItem(
+                              value: v,
+                              child: Text("$v"),
+                            ),
+                          )
                               .toList(),
                           onChanged: (v) {
                             if (v == null) return;
@@ -384,7 +478,10 @@ class _AddMedicineSheetState extends State<_AddMedicineSheet> {
                   const SizedBox(height: 12),
                   const Align(
                     alignment: Alignment.centerLeft,
-                    child: Text("Vakitler", style: TextStyle(fontWeight: FontWeight.w900)),
+                    child: Text(
+                      "Vakitler",
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
                   ),
                   const SizedBox(height: 8),
 
@@ -398,10 +495,14 @@ class _AddMedicineSheetState extends State<_AddMedicineSheet> {
                       ),
                       child: ListTile(
                         leading: const Icon(Icons.schedule_rounded),
-                        title: Text("Doz ${i + 1}",
-                            style: const TextStyle(fontWeight: FontWeight.w900)),
+                        title: Text(
+                          "Doz ${i + 1}",
+                          style: const TextStyle(fontWeight: FontWeight.w900),
+                        ),
                         subtitle: Text(
-                          _times[i] == null ? "Saat seç" : widget.formatTime(_times[i]!),
+                          _times[i] == null
+                              ? "Saat seç"
+                              : widget.formatTime(_times[i]!),
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                         trailing: const Icon(Icons.chevron_right_rounded),
