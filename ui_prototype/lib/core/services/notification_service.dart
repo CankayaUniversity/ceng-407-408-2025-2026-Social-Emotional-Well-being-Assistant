@@ -1,8 +1,12 @@
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
+
 import '../config/app_config.dart';
 
 class NotificationService {
@@ -11,17 +15,18 @@ class NotificationService {
   NotificationService._internal();
 
   final FlutterLocalNotificationsPlugin? _notificationsPlugin =
-      !kIsWeb ? FlutterLocalNotificationsPlugin() : null;
+  !kIsWeb ? FlutterLocalNotificationsPlugin() : null;
 
   Future<void> init() async {
-    // Skip notification initialization on web
     if (kIsWeb) {
-      print('[NotificationService] Skipping notification init on web platform');
+      debugPrint('[NotificationService] Skipping notification init on web platform');
       return;
     }
 
+    tz.initializeTimeZones();
+
     const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+    AndroidInitializationSettings('@mipmap/ic_launcher');
 
     const InitializationSettings initializationSettings = InitializationSettings(
       android: initializationSettingsAndroid,
@@ -29,15 +34,13 @@ class NotificationService {
 
     await _notificationsPlugin?.initialize(
       initializationSettings,
-      onDidReceiveNotificationResponse: (details) {
-        // Bildirime tıklandığında yapılacak işlemler buraya gelebilir
-      },
+      onDidReceiveNotificationResponse: (details) {},
     );
 
-    // Android 13+ için izin iste
     if (defaultTargetPlatform == TargetPlatform.android) {
       await _notificationsPlugin
-          ?.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
           ?.requestNotificationsPermission();
     }
   }
@@ -47,13 +50,10 @@ class NotificationService {
     required String title,
     required String body,
   }) async {
-    // Skip notifications on web
     if (kIsWeb || _notificationsPlugin == null) {
-      print('[NotificationService] Notification skipped on web: $title - $body');
+      debugPrint('[NotificationService] Notification skipped on web: $title - $body');
       return;
     }
-
-    final plugin = _notificationsPlugin;
 
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'community_chat_channel',
@@ -68,7 +68,49 @@ class NotificationService {
       android: androidDetails,
     );
 
-    await plugin.show(id, title, body, notificationDetails);
+    await _notificationsPlugin!.show(id, title, body, notificationDetails);
+  }
+
+  Future<void> scheduleMedicineNotification({
+    required int id,
+    required String medicineName,
+    required String timeHHmm,
+  }) async {
+    if (kIsWeb || _notificationsPlugin == null) {
+      debugPrint('[NotificationService] Medicine notification skipped on web');
+      return;
+    }
+
+    final scheduledDate = tz.TZDateTime.now(tz.local).add(
+      const Duration(seconds: 10),
+    );
+
+    debugPrint("Scheduling medicine notification at: $scheduledDate");
+
+    await _notificationsPlugin!.zonedSchedule(
+      id,
+      'İlaç zamanı 💊',
+      '$medicineName alma saatin geldi.',
+      scheduledDate,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'medicine_channel',
+          'Medicine Reminders',
+          channelDescription: 'Medicine reminder notifications',
+          importance: Importance.max,
+          priority: Priority.high,
+          showWhen: true,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+      UILocalNotificationDateInterpretation.absoluteTime,
+    );
+  }
+
+  Future<void> cancelMedicineNotification(int id) async {
+    if (kIsWeb || _notificationsPlugin == null) return;
+    await _notificationsPlugin!.cancel(id);
   }
 
   Future<void> sendEmailAutomatically({
@@ -77,15 +119,11 @@ class NotificationService {
     required String userName,
     required String message,
   }) async {
-    print('[DEBUG] NotificationService: Starting sendEmailAutomatically');
-    print('[DEBUG] NotificationService: Recipient: $recipientEmail');
-    print('[DEBUG] NotificationService: ToName: $toName, UserName: $userName');
-    print('[DEBUG] NotificationService: ServiceID: ${AppConfig.emailjsServiceId}');
-    print('[DEBUG] NotificationService: TemplateID: ${AppConfig.emailjsTemplateId}');
-    print('[DEBUG] NotificationService: PublicKey exists: ${AppConfig.emailjsPublicKey.isNotEmpty}');
+    debugPrint('[DEBUG] NotificationService: Starting sendEmailAutomatically');
 
-    if (AppConfig.emailjsPublicKey == 'YOUR_PUBLIC_KEY' || AppConfig.emailjsPublicKey.isEmpty) {
-      print('[ERROR] NotificationService: EmailJS Public Key is not configured in AppConfig.dart');
+    if (AppConfig.emailjsPublicKey == 'YOUR_PUBLIC_KEY' ||
+        AppConfig.emailjsPublicKey.isEmpty) {
+      debugPrint('[ERROR] NotificationService: EmailJS Public Key is not configured');
       return;
     }
 
@@ -111,14 +149,11 @@ class NotificationService {
         }),
       );
 
-      print('[DEBUG] NotificationService: EmailJS Response Status: ${response.statusCode}');
-      print('[DEBUG] NotificationService: EmailJS Response Body: ${response.body}');
-
       if (response.statusCode != 200) {
         throw 'EmailJS Error: ${response.statusCode} ${response.body}';
       }
     } catch (error) {
-      print('[ERROR] NotificationService: Failed to send automatic email: $error');
+      debugPrint('[ERROR] NotificationService: Failed to send automatic email: $error');
       rethrow;
     }
   }
@@ -131,7 +166,7 @@ class NotificationService {
     final Uri emailLaunchUri = Uri(
       scheme: 'mailto',
       path: recipient,
-      query: _encodeQueryParameters(<String, String>{
+      query: _encodeQueryParameters({
         'subject': subject,
         'body': body,
       }),
@@ -146,8 +181,12 @@ class NotificationService {
 
   String? _encodeQueryParameters(Map<String, String> params) {
     return params.entries
-        .map((MapEntry<String, String> e) =>
-            '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+        .map(
+          (e) =>
+      '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}',
+    )
         .join('&');
   }
 }
+message.txt
+6 KB
