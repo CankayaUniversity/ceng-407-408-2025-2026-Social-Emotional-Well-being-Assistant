@@ -188,5 +188,3 @@ class NotificationService {
         .join('&');
   }
 }
-message.txt
-6 KB
