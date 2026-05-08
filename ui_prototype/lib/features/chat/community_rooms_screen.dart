@@ -462,9 +462,9 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     });
   }
 
-  Future<void> _leaveRoom() async {
-    if (_leavingRoom || _currentRoom == null) return;
-    final roomToLeave = _currentRoom!;
+  Future<void> _leaveRoom({String? roomName}) async {
+    final roomToLeave = roomName ?? _currentRoom;
+    if (_leavingRoom || roomToLeave == null) return;
     _leavingRoom = true;
     try {
       // 1. Tell backend we are leaving
@@ -474,12 +474,16 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
       _chatService.leaveRoom(roomToLeave, _userId!, _chatUsername!);
 
       _safeSetState(() {
-        _joined = false;
-        _items.clear();
-        if (!_currentRoom!.startsWith('private-')) {
+        if (roomName == null) {
+          _joined = false;
+          _items.clear();
+        }
+        if (!roomToLeave.startsWith('private-')) {
           _setRoomStatus(roomToLeave, RoomMembershipStatus.left);
         }
-        _currentRoom = null;
+        if (roomName == null) {
+          _currentRoom = null;
+        }
         _filteredRooms = List<String>.from(_allRooms);
       });
     } catch (e) {
@@ -674,6 +678,9 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
             itemCount: _filteredRooms.length,
             itemBuilder: (context, index) {
               final room = _filteredRooms[index];
+              final status = _getRoomStatus(room);
+              final isJoined = status == RoomMembershipStatus.joined;
+
               return Container(
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
@@ -694,17 +701,32 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
                   subtitle: Row(
                     children: [
                       Text("Aktif Grup", style: TextStyle(fontWeight: FontWeight.w700, color: navy.withOpacity(0.4), fontSize: 12)),
-                      const SizedBox(width: 8),
-                      _buildStatusBadge(room, navy, gold),
                     ],
                   ),
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: navy.withOpacity(0.1)),
-                      borderRadius: BorderRadius.circular(12),
+                  trailing: GestureDetector(
+                    onTap: () {
+                      if (isJoined) {
+                        _leaveRoom(roomName: room);
+                      } else {
+                        _joinRoom(room);
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: isJoined ? Colors.red.withOpacity(0.3) : navy.withOpacity(0.1)),
+                        color: isJoined ? Colors.red.withOpacity(0.05) : null,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        isJoined ? "Ayrıl" : "Katıl",
+                        style: TextStyle(
+                          color: isJoined ? Colors.red.shade700 : navy,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                        ),
+                      ),
                     ),
-                    child: Text("Katıl", style: TextStyle(color: navy, fontWeight: FontWeight.w900, fontSize: 13)),
                   ),
                   onTap: () => _joinRoom(room),
                 ),
