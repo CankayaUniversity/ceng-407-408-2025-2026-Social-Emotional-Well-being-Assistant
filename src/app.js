@@ -53,8 +53,8 @@ cron.schedule("0 0 * * *", () => {
   }
 })();
 
-// 2. Community cleanup job
-   24 saatten eski mesajları siler
+/* 2. Community cleanup job
+24 saatten eski mesajları siler
 ======================= */
 setInterval(async () => {
   try {
