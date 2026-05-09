@@ -3,6 +3,7 @@ const express = require("express");
 const authRoutes = require("./auth.routes");
 const homeRoutes = require("./home.routes");
 const communityRoutes = require("./community.routes");
+const eventsRoutes = require("./events.routes");
 
 const authMiddleware = require("../middlewares/auth.middleware");
 const authService = require("../services/auth.service");
@@ -15,6 +16,7 @@ const router = express.Router();
 router.use("/auth", authRoutes);
 router.use("/home", homeRoutes);
 router.use("/community", communityRoutes);
+router.use("/events", eventsRoutes);
 
 /* =======================
    Protected Example Route

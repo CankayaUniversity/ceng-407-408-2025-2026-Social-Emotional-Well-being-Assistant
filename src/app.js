@@ -2,9 +2,11 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+const cron = require("node-cron");
 
 const prisma = require("./prisma");
 const apiRoutes = require("../routes");
+const eventsController = require("../controllers/events.controller");
 
 const app = express();
 
@@ -34,7 +36,24 @@ app.get("/health", (req, res) => {
 app.use("/api", apiRoutes);
 
 /* =======================
-   Community cleanup job
+   Scheduled Jobs
+======================= */
+
+// 1. Event Synchronization (Every 24 hours at midnight)
+cron.schedule("0 0 * * *", () => {
+  eventsController.syncEventsFromSource();
+});
+
+// Initial sync on startup if DB is empty
+(async () => {
+  const count = await prisma.event.count();
+  if (count === 0) {
+    console.log("Empty events table detected. Running initial sync...");
+    eventsController.syncEventsFromSource();
+  }
+})();
+
+// 2. Community cleanup job
    24 saatten eski mesajları siler
 ======================= */
 setInterval(async () => {

@@ -94,3 +94,18 @@ model CommunityRoomSession {
 
   @@map("community_room_sessions")
 }
+
+model Event {
+  id         Int      @id @default(autoincrement())
+  externalId String   @unique
+  title      String
+  date       String
+  location   String
+  category   String
+  imageUrl   String
+  link       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("events")
+}
