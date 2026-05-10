@@ -1,3 +1,5 @@
+import '../mood/data/mood_repository.dart';
+import '../mood/models/mood_models.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -109,9 +111,9 @@ Rules:
         model: AppConfig.ollamaModel,
         systemPrompt: _systemPrompt,
       );
-      
+
       // Fire and forget! This will load the model into your PC's memory right now
-      _ollamaService.warmUpModel(); 
+      _ollamaService.warmUpModel();
 
       _chatSession = _ollamaService.startChatSession();
     } catch (e) {
@@ -215,7 +217,7 @@ Rules:
     // Analyze history for patterns
     final recentNegativeCount = history
         .where((entry) =>
-    negativeEmotions.contains(_normalizeEmotionLabel(entry['emotion'])))
+        negativeEmotions.contains(_normalizeEmotionLabel(entry['emotion'])))
         .length;
 
     // High risk: current negative emotion + 4 recent negative emotions
@@ -262,7 +264,7 @@ Rules:
 
       await file.writeAsString(jsonEncode(emotionsList));
       print('[DEBUG] Emotion saved to ${file.path}');
-      
+
       // Format each emotion separately to avoid logcat buffer issues
       print('\n=== Last Emotions (newest first)) ===');
       final jsonEncoder = const JsonEncoder.withIndent('  ');
@@ -316,6 +318,7 @@ Rules:
       'other',
       'notr',
     };
+
     return normalized.isEmpty || neutralValues.contains(normalized);
   }
 
@@ -324,8 +327,8 @@ Rules:
       return '';
     }
 
-    // Normalize common Turkish characters so labels like "Nötr" map to "notr".
     final lowered = emotion.trim().toLowerCase();
+
     final asciiLike = lowered
         .replaceAll('ö', 'o')
         .replaceAll('ü', 'u')
@@ -337,10 +340,101 @@ Rules:
     return asciiLike.replaceAll(RegExp(r'[^a-z]'), '');
   }
 
+  int _mapEmotionToMoodScore(String? emotion) {
+    final e = _normalizeEmotionLabel(emotion);
+
+    if (e.contains('joy') ||
+        e.contains('happy') ||
+        e.contains('mutlu') ||
+        e.contains('neseli')) {
+      return 5;
+    }
+
+    if (e.contains('calm') ||
+        e.contains('good') ||
+        e.contains('iyi') ||
+        e.contains('rahat')) {
+      return 4;
+    }
+
+    if (e.contains('neutral') ||
+        e.contains('notr') ||
+        e.contains('normal')) {
+      return 3;
+    }
+
+    if (e.contains('sad') ||
+        e.contains('uzuntu') ||
+        e.contains('fear') ||
+        e.contains('korku') ||
+        e.contains('kaygi')) {
+      return 2;
+    }
+
+    if (e.contains('anger') ||
+        e.contains('ofke') ||
+        e.contains('depressed') ||
+        e.contains('disgust') ||
+        e.contains('berbat')) {
+      return 1;
+    }
+
+    return 3;
+  }
+
+  String _todayDateKey() {
+    final now = DateTime.now();
+
+    return '${now.year.toString().padLeft(4, '0')}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _saveDetectedMoodToCalendar(
+      String text,
+      String? emotion,
+      ) async {
+    if (emotion == null || emotion.trim().isEmpty) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userKey = prefs.getString('current_mood_user_key') ?? 'demo_user';
+
+      final repo = MoodRepository();
+      await repo.bindUser(userKey);
+
+      final score = _mapEmotionToMoodScore(emotion);
+
+      final moodType = switch (score) {
+        1 => MoodType.terrible,
+        2 => MoodType.bad,
+        3 => MoodType.okay,
+        4 => MoodType.good,
+        5 => MoodType.great,
+        _ => MoodType.okay,
+      };
+
+      repo.upsertEntry(
+        MoodEntry(
+          day: dateOnly(DateTime.now()),
+          mood: moodType,
+          intensity: score,
+          tags: const ['AI Chat'],
+          title: 'AI Chat Analizi',
+          note: 'Mesaj: $text\nAlgılanan duygu: $emotion',
+        ),
+      );
+
+      print('[DEBUG] AI Chat mood saved to MoodRepository: $userKey / $moodType');
+    } catch (e) {
+      print('[ERROR] AI Chat mood save failed: $e');
+    }
+  }
+
   String? _resolveEmotionForRecommendations(
-    String? currentEmotion,
-    List<Map<String, dynamic>> history,
-  ) {
+      String? currentEmotion,
+      List<Map<String, dynamic>> history,
+      ) {
     final normalizedCurrent = currentEmotion?.trim().toLowerCase();
 
     final sorted = [...history]
@@ -545,6 +639,7 @@ Rules:
 
       // Save the detected emotion to a JSON file
       await _saveEmotionToJson(text, emotion);
+      await _saveDetectedMoodToCalendar(text, emotion);
 
       // Load mood history so recommendation requests can use recent emotional context.
       final emotionHistory = await _loadEmotionHistory();
@@ -631,10 +726,10 @@ Rules:
         }
       }
 
-        // 3. Send message to Gemini with emotion and recommendations (if asked)
-        final moodHistoryContext = _buildMoodHistoryContext(emotionHistory);
-        final effectiveMoodForPrompt = recommendationEmotion ?? emotion;
-        final prompt = effectiveMoodForPrompt != null
+      // 3. Send message to Gemini with emotion and recommendations (if asked)
+      final moodHistoryContext = _buildMoodHistoryContext(emotionHistory);
+      final effectiveMoodForPrompt = recommendationEmotion ?? emotion;
+      final prompt = effectiveMoodForPrompt != null
           ? 'Şu anki ruh halim: ${emotion ?? "belirlenemedi"}. Öneriler için tercih edilen ruh hali: $effectiveMoodForPrompt. Mesajım: $text$moodHistoryContext$recommendationContext$riskContext'
           : 'Mesajım: $text$moodHistoryContext$recommendationContext$riskContext';
 
