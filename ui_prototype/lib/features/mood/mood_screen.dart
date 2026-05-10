@@ -1,3 +1,4 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
 
@@ -33,12 +34,10 @@ class _MoodScreenState extends State<MoodScreen> {
   void initState() {
     super.initState();
 
-    // ✅ Default dolu gelmesin diye demo veriyi KALDIRDIK
-    // repo.seedDemo();
-
-    // ✅ User'a özel mood (kalıcı) yükle
-    // Not: userKey'i login'den (email/username/userId) verin.
     Future.microtask(() async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('current_mood_user_key', widget.userKey);
+
       await repo.bindUser(widget.userKey);
     });
   }
