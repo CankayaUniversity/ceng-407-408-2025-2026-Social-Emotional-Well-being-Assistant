@@ -67,6 +67,7 @@ class MoodCalendarCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           TableCalendar(
+            locale: 'tr_TR',
             firstDay: DateTime.utc(2010, 1, 1),
             lastDay: DateTime.utc(2100, 12, 31),
             focusedDay: dateOnly(focusedDay),

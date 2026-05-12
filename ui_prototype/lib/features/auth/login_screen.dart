@@ -213,7 +213,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             const SizedBox(height: 20),
                             const Text(
-                              "Welcome Back",
+                              "Hoş Geldin",
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 32,
@@ -223,7 +223,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                             const Text(
-                              "Sign in to continue your journey",
+                              "Yolculuğuna devam etmek için giriş yap",
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 16,
@@ -248,7 +248,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       textInputAction: TextInputAction.next,
                                       keyboardType: TextInputType.emailAddress,
                                       decoration: InputDecoration(
-                                        labelText: "Email",
+                                        labelText: "E-posta",
                                         labelStyle: const TextStyle(color: navy, fontWeight: FontWeight.w600),
                                         prefixIcon: const Icon(Icons.email_outlined, color: navy),
                                         border: OutlineInputBorder(
@@ -266,7 +266,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       obscureText: _obscure,
                                       onSubmitted: (_) => _login(),
                                       decoration: InputDecoration(
-                                        labelText: "Password",
+                                        labelText: "Şifre",
                                         labelStyle: const TextStyle(color: navy, fontWeight: FontWeight.w600),
                                         prefixIcon: const Icon(Icons.lock_outline, color: navy),
                                         suffixIcon: IconButton(
@@ -311,7 +311,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                                 ),
                                               )
                                             : const Text(
-                                                "LOGIN",
+                                                "GİRİŞ YAP",
                                                 style: TextStyle(
                                                   fontSize: 18,
                                                   fontWeight: FontWeight.bold,
@@ -324,11 +324,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                     TextButton(
                                       onPressed: () {
                                         ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text("Forgot password functionality coming soon")),
+                                          const SnackBar(content: Text("Şifremi unuttum özelliği yakında eklenecek.")),
                                         );
                                       },
                                       child: const Text(
-                                        "Forgot password?",
+                                        "Şifremi Unuttum",
                                         style: TextStyle(color: navy, fontWeight: FontWeight.w700),
                                       ),
                                     ),
@@ -341,13 +341,13 @@ class _LoginScreenState extends State<LoginScreen> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 const Text(
-                                  "Not a member? ",
+                                  "Üye değil misin? ",
                                   style: TextStyle(color: navy, fontWeight: FontWeight.w500),
                                 ),
                                 TextButton(
                                   onPressed: _goRegister,
                                   child: const Text(
-                                    "Sign up",
+                                    "Kayıt Ol",
                                     style: TextStyle(
                                       color: navy,
                                       fontWeight: FontWeight.w900,

@@ -175,7 +175,7 @@ class _MoodScreenState extends State<MoodScreen> {
         backgroundColor: navy,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text("Mood", style: TextStyle(fontWeight: FontWeight.w900)),
+        title: const Text("Mod Takvimin", style: TextStyle(fontWeight: FontWeight.w900)),
         centerTitle: false,
         actions: [
           IconButton(

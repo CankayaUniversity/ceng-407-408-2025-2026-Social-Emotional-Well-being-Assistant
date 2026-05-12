@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:ui_prototype/core/api/api_client.dart';
 
 class EventModel {
   final String id;
@@ -7,6 +10,7 @@ class EventModel {
   final String location;
   final String imageUrl;
   final String category;
+  final String? link;
 
   EventModel({
     required this.id,
@@ -15,7 +19,20 @@ class EventModel {
     required this.location,
     required this.imageUrl,
     required this.category,
+    this.link,
   });
+
+  factory EventModel.fromJson(Map<String, dynamic> json) {
+    return EventModel(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? 'Başlıksız Etkinlik',
+      date: json['date']?.toString() ?? '',
+      location: json['location']?.toString() ?? '',
+      imageUrl: json['imageUrl']?.toString() ?? 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=500&q=80',
+      category: json['category']?.toString() ?? 'Etkinlik',
+      link: json['link']?.toString(),
+    );
+  }
 }
 
 class EventService {
@@ -24,43 +41,17 @@ class EventService {
   EventService._internal();
 
   Future<List<EventModel>> fetchUpcomingEvents() async {
-    // Simulate network delay
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      final response = await ApiClient.get('/events');
+      if (response.statusCode == 200) {
+        final List<dynamic> decoded = jsonDecode(response.body);
+        return decoded.map((e) => EventModel.fromJson(e)).toList();
+      }
+    } catch (e) {
+      debugPrint('FETCH EVENTS ERROR: $e');
+    }
 
-    // Mock data based on typical event sources (Concerts, Theatre, Municipal activities)
-    return [
-      EventModel(
-        id: '1',
-        title: 'Sertab Erener Konseri',
-        date: '20 Mayıs 2024 - 21:00',
-        location: 'Harbiye Açık Hava',
-        category: 'Konser',
-        imageUrl: 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=500&q=80',
-      ),
-      EventModel(
-        id: '2',
-        title: 'Hamlet Tiyatro Oyunu',
-        date: '22 Mayıs 2024 - 20:30',
-        location: 'Zorlu PSM',
-        category: 'Tiyatro',
-        imageUrl: 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=500&q=80',
-      ),
-      EventModel(
-        id: '3',
-        title: 'İstanbul Kitap Fuarı',
-        date: '25 Mayıs 2024 - 10:00',
-        location: 'TÜYAP Fuar Merkezi',
-        category: 'Fuar',
-        imageUrl: 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=500&q=80',
-      ),
-      EventModel(
-        id: '4',
-        title: 'Yaz Sinema Geceleri',
-        date: '28 Mayıs 2024 - 21:00',
-        location: 'Beşiktaş Sahil',
-        category: 'Sinema',
-        imageUrl: 'https://images.unsplash.com/photo-1485846234645-a62644f84728?w=500&q=80',
-      ),
-    ];
+    // Fallback to empty list if API fails
+    return [];
   }
 }

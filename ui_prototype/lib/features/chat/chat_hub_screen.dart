@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'ai_chat_screen.dart';
-import 'community_rooms_screen.dart';
-
-import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:ui_prototype/core/services/event_service.dart';
 import 'ai_chat_screen.dart';
 import 'community_rooms_screen.dart';
+import 'all_events_screen.dart';
 
 class ChatHubScreen extends StatefulWidget {
   const ChatHubScreen({super.key});
@@ -46,7 +44,6 @@ class _ChatHubScreenState extends State<ChatHubScreen> {
   @override
   Widget build(BuildContext context) {
     const navy = Color(0xFF2B3A67);
-    const mint = Color(0xFFD6E5E3);
     const gold = Color(0xFFFFE6A7);
 
     return Scaffold(
@@ -55,7 +52,7 @@ class _ChatHubScreenState extends State<ChatHubScreen> {
         backgroundColor: navy,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text('Chat', style: TextStyle(fontWeight: FontWeight.w900)),
+        title: const Text('Keşfet', style: TextStyle(fontWeight: FontWeight.w900)),
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
@@ -63,8 +60,8 @@ class _ChatHubScreenState extends State<ChatHubScreen> {
           _chatCard(
             context,
             icon: Icons.settings_input_component_rounded,
-            title: 'AI Chat',
-            subtitle: 'Personal wellbeing assistant',
+            title: 'Ebhire',
+            subtitle: 'Kişisel asistanın',
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AiChatScreen())),
             navy: navy,
             gold: gold,
@@ -73,8 +70,8 @@ class _ChatHubScreenState extends State<ChatHubScreen> {
           _chatCard(
             context,
             icon: Icons.groups_rounded,
-            title: 'Community Rooms',
-            subtitle: 'Join peer support groups',
+            title: 'Topluluk Odaları',
+            subtitle: 'Destek gruplarına katıl',
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CommunityRoomsScreen())),
             navy: navy,
             gold: gold,
@@ -83,9 +80,9 @@ class _ChatHubScreenState extends State<ChatHubScreen> {
           _chatCard(
             context,
             icon: Icons.lock_rounded,
-            title: 'Private Chats',
-            subtitle: 'One-on-one secure messaging',
-            onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Private Requests (UI draft)'))),
+            title: 'Özel Sohbet Odaları',
+            subtitle: 'Birebir güvenli mesajlaşma',
+            onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Özel İstekler (Arayüz taslağı)'))),
             navy: navy,
             gold: gold,
           ),
@@ -104,7 +101,7 @@ class _ChatHubScreenState extends State<ChatHubScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Upcoming Events',
+              'Yakındaki Etkinlikler',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w900,
@@ -112,12 +109,22 @@ class _ChatHubScreenState extends State<ChatHubScreen> {
               ),
             ),
             if (!_loadingEvents)
-              Text(
-                'View All',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: navy.withOpacity(0.5),
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AllEventsScreen(events: _events),
+                    ),
+                  );
+                },
+                child: Text(
+                  'Tümünü Gör',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: navy.withOpacity(0.5),
+                  ),
                 ),
               ),
           ],
@@ -126,7 +133,7 @@ class _ChatHubScreenState extends State<ChatHubScreen> {
         if (_loadingEvents)
           const Center(child: CircularProgressIndicator())
         else if (_events.isEmpty)
-          const Text('No upcoming events found.')
+          const Text('Yakınlarda etkinlik bulunamadı.')
         else
           SizedBox(
             height: 240,
@@ -144,110 +151,132 @@ class _ChatHubScreenState extends State<ChatHubScreen> {
   }
 
   Widget _buildEventCard(EventModel event, Color navy, Color gold) {
-    return Container(
-      width: 200,
-      margin: const EdgeInsets.only(right: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          )
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            child: Image.network(
-              event.imageUrl,
-              height: 120,
-              width: 200,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(
+    return GestureDetector(
+      onTap: () async {
+        if (event.link != null && event.link!.isNotEmpty) {
+          final uri = Uri.parse(event.link!);
+          try {
+            // mode: LaunchMode.externalApplication ensures it opens in the default browser
+            if (await canLaunchUrl(uri)) {
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
+            } else {
+              debugPrint('Could not launch ${event.link}');
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Could not open the link.')),
+                );
+              }
+            }
+          } catch (e) {
+            debugPrint('Error launching URL: $e');
+          }
+        }
+      },
+      child: Container(
+        width: 200,
+        margin: const EdgeInsets.only(right: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              child: Image.network(
+                event.imageUrl,
                 height: 120,
-                color: navy.withOpacity(0.1),
-                child: Icon(Icons.image_not_supported, color: navy),
+                width: 200,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  height: 120,
+                  color: navy.withOpacity(0.1),
+                  child: Icon(Icons.image_not_supported, color: navy),
+                ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: gold.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(8),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: gold.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      event.category,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: navy,
+                      ),
+                    ),
                   ),
-                  child: Text(
-                    event.category,
+                  const SizedBox(height: 8),
+                  Text(
+                    event.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w900,
                       color: navy,
+                      fontSize: 14,
                     ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  event.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    color: navy,
-                    fontSize: 14,
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.calendar_today, size: 12, color: navy.withOpacity(0.5)),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          event.date,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: navy.withOpacity(0.5),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(Icons.calendar_today, size: 12, color: navy.withOpacity(0.5)),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        event.date,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: navy.withOpacity(0.5),
-                          fontWeight: FontWeight.w600,
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on, size: 12, color: navy.withOpacity(0.5)),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          event.location,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: navy.withOpacity(0.5),
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Icon(Icons.location_on, size: 12, color: navy.withOpacity(0.5)),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        event.location,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: navy.withOpacity(0.5),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

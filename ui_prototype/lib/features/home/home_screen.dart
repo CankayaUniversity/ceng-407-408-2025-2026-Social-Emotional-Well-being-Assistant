@@ -207,7 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: navy,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text("Home", style: TextStyle(fontWeight: FontWeight.w900)),
+        title: const Text("Ana Sayfa", style: TextStyle(fontWeight: FontWeight.w900)),
         centerTitle: false,
         actions: [
           IconButton(
@@ -232,178 +232,201 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: Column(
+      body: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         children: [
-          // Month Label and Horizontal Picker
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Text(
-                  DateFormat("MMMM yyyy", "tr_TR").format(_focusedDay),
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: navy),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.chevron_left_rounded, color: navy),
-                  onPressed: () {
-                    setState(() {
-                      _focusedDay = DateTime(_focusedDay.year, _focusedDay.month - 1);
-                    });
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.chevron_right_rounded, color: navy),
-                  onPressed: () {
-                    setState(() {
-                      _focusedDay = DateTime(_focusedDay.year, _focusedDay.month + 1);
-                    });
-                  },
+          const SizedBox(height: 16),
+          // Standardized Calendar Container
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: navy.withOpacity(0.05),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  blurRadius: 15,
+                  offset: const Offset(0, 8),
+                  color: navy.withOpacity(0.05),
                 ),
               ],
             ),
-          ),
-          TableCalendar(
-            firstDay: DateTime.utc(2022, 1, 1),
-            lastDay: DateTime.utc(2030, 12, 31),
-            focusedDay: _focusedDay,
-            calendarFormat: CalendarFormat.month,
-            headerVisible: false,
-            daysOfWeekStyle: const DaysOfWeekStyle(
-              weekdayStyle: TextStyle(color: navy, fontWeight: FontWeight.bold),
-              weekendStyle: TextStyle(color: navy, fontWeight: FontWeight.bold),
-            ),
-            calendarStyle: CalendarStyle(
-              isTodayHighlighted: false,
-              selectedDecoration: BoxDecoration(color: navy, borderRadius: BorderRadius.circular(12)),
-              defaultDecoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-              weekendDecoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-              selectedTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              defaultTextStyle: const TextStyle(color: navy, fontWeight: FontWeight.bold),
-              weekendTextStyle: const TextStyle(color: navy, fontWeight: FontWeight.bold),
-              markersMaxCount: 5,
-              markerDecoration: const BoxDecoration(color: navy, shape: BoxShape.circle),
-            ),
-            selectedDayPredicate: (d) => isSameDay(_selectedDay, d),
-            onDaySelected: (s, f) async {
-              final selected = _key(s);
-              setState(() {
-                _selectedDay = selected;
-                _focusedDay = f;
-              });
-              await _loadDay(selected);
-              if (!mounted) return;
-              setState(() {});
-            },
-            onPageChanged: (f) {
-              setState(() {
-                _focusedDay = f;
-              });
-            },
-            calendarBuilders: CalendarBuilders(
-              markerBuilder: (context, date, events) {
-                final count = _doneCount(date);
-                if (count == 0) return const SizedBox.shrink();
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(
-                    count,
-                    (index) => Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 1),
-                      width: 5,
-                      height: 5,
-                      decoration: const BoxDecoration(
-                        color: navy,
-                        shape: BoxShape.circle,
-                      ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                // Month Label and Horizontal Picker
+                Row(
+                  children: [
+                    Text(
+                      DateFormat("MMMM yyyy", "tr_TR").format(_focusedDay).toUpperCase(),
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: navy),
                     ),
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 20),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              children: [
-                // Progress Card
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: navy,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(color: navy.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))
-                    ],
-                  ),
-                  child: Stack(
-                    children: [
-                      Positioned(
-                        right: -20,
-                        top: -20,
-                        child: Icon(Icons.eco_rounded, size: 100, color: Colors.white.withOpacity(0.1)),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            "GÜNLÜK İLERLEME",
-                            style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 12),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            "%${(percent * 100).toInt()}",
-                            style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            "Bugün $done/$total alışkanlık tamamlandı.",
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: kHomeHabits.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 16,
-                    crossAxisSpacing: 16,
-                    childAspectRatio: 0.95,
-                  ),
-                  itemBuilder: (_, i) {
-                    final h = kHomeHabits[i];
-                    final st = _stateOf(day)[h.type]!;
-                    return HomeHabitCard(
-                      title: h.title,
-                      emoji: h.emoji,
-                      color: h.color,
-                      done: st.done,
-                      timeText: st.time?.format(context),
-                      onTap: () => _onHabitTap(h.type),
-                      onLongPress: () async {
-                        final t = await showTimePicker(
-                          context: context,
-                          initialTime: st.time ?? TimeOfDay.now(),
-                        );
-                        if (t != null) {
-                          setState(() => st.time = t);
-                          await _saveDay(day);
-                        }
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left_rounded, color: navy),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        setState(() {
+                          _focusedDay = DateTime(_focusedDay.year, _focusedDay.month - 1);
+                        });
                       },
-                    );
-                  },
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right_rounded, color: navy),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        setState(() {
+                          _focusedDay = DateTime(_focusedDay.year, _focusedDay.month + 1);
+                        });
+                      },
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 30),
+                const SizedBox(height: 16),
+                TableCalendar(
+                  locale: 'tr_TR',
+                  firstDay: DateTime.utc(2022, 1, 1),
+                  lastDay: DateTime.utc(2030, 12, 31),
+                  focusedDay: _focusedDay,
+                  calendarFormat: CalendarFormat.month,
+                  headerVisible: false,
+                  startingDayOfWeek: StartingDayOfWeek.monday,
+                  daysOfWeekStyle: const DaysOfWeekStyle(
+                    weekdayStyle: TextStyle(color: navy, fontWeight: FontWeight.bold),
+                    weekendStyle: TextStyle(color: navy, fontWeight: FontWeight.bold),
+                  ),
+                  calendarStyle: CalendarStyle(
+                    isTodayHighlighted: false,
+                    selectedDecoration: BoxDecoration(color: navy, borderRadius: BorderRadius.circular(12)),
+                    defaultDecoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                    weekendDecoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                    selectedTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    defaultTextStyle: const TextStyle(color: navy, fontWeight: FontWeight.bold),
+                    weekendTextStyle: const TextStyle(color: navy, fontWeight: FontWeight.bold),
+                    markersMaxCount: 5,
+                    markerDecoration: const BoxDecoration(color: navy, shape: BoxShape.circle),
+                  ),
+                  selectedDayPredicate: (d) => isSameDay(_selectedDay, d),
+                  onDaySelected: (s, f) async {
+                    final selected = _key(s);
+                    setState(() {
+                      _selectedDay = selected;
+                      _focusedDay = f;
+                    });
+                    await _loadDay(selected);
+                    if (!mounted) return;
+                    setState(() {});
+                  },
+                  onPageChanged: (f) {
+                    setState(() {
+                      _focusedDay = f;
+                    });
+                  },
+                  calendarBuilders: CalendarBuilders(
+                    markerBuilder: (context, date, events) {
+                      final count = _doneCount(date);
+                      if (count == 0) return const SizedBox.shrink();
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(
+                          count,
+                          (index) => Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 1),
+                            width: 5,
+                            height: 5,
+                            decoration: const BoxDecoration(
+                              color: navy,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ],
             ),
           ),
+          const SizedBox(height: 24),
+          // Progress Card
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: navy,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(color: navy.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))
+              ],
+            ),
+            child: Stack(
+              children: [
+                Positioned(
+                  right: -20,
+                  top: -20,
+                  child: Icon(Icons.eco_rounded, size: 100, color: Colors.white.withOpacity(0.1)),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "GÜNLÜK İLERLEME",
+                      style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "%${(percent * 100).toInt()}",
+                      style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "Bugün $done/$total alışkanlık tamamlandı.",
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: kHomeHabits.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 16,
+              crossAxisSpacing: 16,
+              childAspectRatio: 0.95,
+            ),
+            itemBuilder: (_, i) {
+              final h = kHomeHabits[i];
+              final st = _stateOf(day)[h.type]!;
+              return HomeHabitCard(
+                title: h.title,
+                emoji: h.emoji,
+                color: h.color,
+                done: st.done,
+                timeText: st.time?.format(context),
+                onTap: () => _onHabitTap(h.type),
+                onLongPress: () async {
+                  final t = await showTimePicker(
+                    context: context,
+                    initialTime: st.time ?? TimeOfDay.now(),
+                  );
+                  if (t != null) {
+                    setState(() => st.time = t);
+                    await _saveDay(day);
+                  }
+                },
+              );
+            },
+          ),
+          const SizedBox(height: 30),
         ],
       ),
     );

@@ -82,7 +82,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     _nicknameController.text = savedNickname.isNotEmpty
         ? savedNickname
-        : (_anonymousMode ? 'Anonymous' : _realName);
+        : (_anonymousMode ? 'Anonim' : _realName);
 
     _ageController.text = savedAge;
     _cityController.text = savedCity;
@@ -271,10 +271,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: navy,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text("Profile", style: TextStyle(fontWeight: FontWeight.w900)),
+        title: const Text("Profil", style: TextStyle(fontWeight: FontWeight.w900)),
         actions: [
           IconButton(
-            tooltip: "Logout",
+            tooltip: "Çıkış Yap",
             onPressed: _logout,
             icon: const Icon(Icons.logout_rounded, color: Colors.white),
           ),
@@ -313,7 +313,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  "NICKNAME",
+                  "TAKMA AD",
                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: navy, letterSpacing: 1.2),
                 ),
                 const SizedBox(height: 6),
@@ -332,12 +332,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     filled: true,
                     fillColor: navy.withOpacity(0.05),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    hintText: _anonymousMode ? 'Set your nickname' : _realName,
+                    hintText: _anonymousMode ? 'Takma adınızı belirleyin' : _realName,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _anonymousMode ? "Anonymous mode is ON" : "Real identity visible",
+                  _anonymousMode ? "Anonim mod AÇIK" : "Gerçek kimlik görünür",
                   style: TextStyle(fontSize: 12, color: Colors.blue.shade700, fontWeight: FontWeight.bold),
                 ),
               ],
@@ -345,7 +345,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
 
           const SizedBox(height: 28),
-          Text("User Information", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: navy)),
+          Text("Kullanıcı Bilgileri", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: navy)),
           const SizedBox(height: 12),
 
           // Grouped User Info Card
@@ -358,22 +358,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             child: Column(
               children: [
-                _profileInput("Age", _ageController, navy, onChanged: _saveAge),
+                _profileInput("Yaş", _ageController, navy, onChanged: _saveAge),
                 const SizedBox(height: 16),
-                _profileInput("City", _cityController, navy, onChanged: _saveCity),
+                _profileInput("Şehir", _cityController, navy, onChanged: _saveCity),
                 const SizedBox(height: 16),
-                _profileInput("Notes / Interests", _notesController, navy, maxLines: 3, onChanged: _saveNotes),
+                _profileInput("Notlar / İlgi Alanları", _notesController, navy, maxLines: 3, onChanged: _saveNotes),
               ],
             ),
           ),
 
           const SizedBox(height: 28),
-          Text("Privacy & Safety", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: navy)),
+          Text("Gizlilik ve Güvenlik", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: navy)),
           const SizedBox(height: 12),
 
           _switchCard(
-            title: "Anonymous mode",
-            subtitle: "Hide real name in chats",
+            title: "Anonim Mod",
+            subtitle: "Sohbetlerde gerçek adını gizler",
             value: _anonymousMode,
             onChanged: _toggleAnonymous,
             icon: Icons.visibility_off_rounded,
@@ -405,9 +405,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("Trusted Contacts", style: TextStyle(fontWeight: FontWeight.w900, color: navy, fontSize: 16)),
+                        const Text("Güvenilir Kişiler", style: TextStyle(fontWeight: FontWeight.w900, color: navy, fontSize: 16)),
                         Text(
-                          loadingContacts ? "Loading..." : (trustedContacts.isEmpty ? "Manage resources" : "${trustedContacts.length} contacts saved"),
+                          loadingContacts ? "Yükleniyor..." : (trustedContacts.isEmpty ? "Kaynakları yönet" : "${trustedContacts.length} kişi kayıtlı"),
                           style: TextStyle(fontWeight: FontWeight.w600, color: navy.withOpacity(0.4), fontSize: 13),
                         ),
                       ],
@@ -424,12 +424,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
 
           const SizedBox(height: 28),
-          Text("Notifications", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: navy)),
+          Text("Bildirimler", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: navy)),
           const SizedBox(height: 12),
 
-          _switchCard(title: "Daily mood reminder", subtitle: "Remind me to log mood daily", value: _moodReminder, onChanged: (v) async { setState(() => _moodReminder = v); await _saveMoodReminder(v); }, icon: Icons.notifications_active_rounded, navy: navy, gold: gold),
+          _switchCard(title: "Günlük Mod Hatırlatıcı", subtitle: "Her gün modunu kaydetmeni hatırlatır", value: _moodReminder, onChanged: (v) async { setState(() => _moodReminder = v); await _saveMoodReminder(v); }, icon: Icons.notifications_active_rounded, navy: navy, gold: gold),
           const SizedBox(height: 12),
-          _switchCard(title: "Crisis notifications", subtitle: "Safety prompts for low mood", value: _crisisNotifications, onChanged: (v) async { setState(() => _crisisNotifications = v); await _saveCrisisNotifications(v); }, icon: Icons.warning_amber_rounded, navy: navy, gold: gold),
+          _switchCard(title: "Kriz Bildirimleri", subtitle: "Düşük mod durumunda bildirim yollar", value: _crisisNotifications, onChanged: (v) async { setState(() => _crisisNotifications = v); await _saveCrisisNotifications(v); }, icon: Icons.warning_amber_rounded, navy: navy, gold: gold),
           const SizedBox(height: 40),
         ],
       ),
