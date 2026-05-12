@@ -44,13 +44,11 @@ cron.schedule("0 0 * * *", () => {
   eventsController.syncEventsFromSource();
 });
 
-// Initial sync on startup if DB is empty
+// Sync on startup in the background to ensure fresh data after deployment
 (async () => {
-  const count = await prisma.event.count();
-  if (count === 0) {
-    console.log("Empty events table detected. Running initial sync...");
-    eventsController.syncEventsFromSource();
-  }
+  console.log("Running event sync on startup...");
+  // Runs in the background so it doesn't block the server from starting
+  eventsController.syncEventsFromSource();
 })();
 
 /* 2. Community cleanup job

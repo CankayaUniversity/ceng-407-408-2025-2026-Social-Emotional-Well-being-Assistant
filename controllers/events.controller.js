@@ -83,7 +83,16 @@ async function syncKulturIstanbul() {
         const date = dateMatch ? dateMatch[0] : (rawDate.split(/\s+/)[0] || "N/A");
         const location = $(el).find("div.wpem-event-location").text().trim() || "N/A";
         const category = $(el).find(".wpem-event-category").text().trim() || "Etkinlik";
-        const imageUrl = $(el).find(".wpem-event-banner-img img").attr("src") || "";
+        
+        let imageUrl = "";
+        const imgElem = $(el).find(".wpem-event-banner-img");
+        if (imgElem.length) {
+          const style = imgElem.attr("style") || "";
+          const imgMatch = style.match(/url\(['"]?(.*?)['"]?\)/);
+          if (imgMatch && imgMatch[1]) {
+            imageUrl = imgMatch[1];
+          }
+        }
 
         if (title) {
           const externalId = `ist-${title}-${date}`.toLowerCase().replace(/[^a-z0-9]/g, "-");
@@ -163,10 +172,13 @@ async function syncAnkaraBelTr() {
           }
         }
       }
+      
+      const imgElem = $(el).find("img");
+      const imageUrl = imgElem.attr("src") || "";
 
       if (title !== 'N/A') {
         const externalId = `ank-${title}-${date}`.toLowerCase().replace(/[^a-z0-9]/g, "-");
-        scrapePromises.push(upsertEvent(externalId, title, date, location, "Etkinlik", "", link));
+        scrapePromises.push(upsertEvent(externalId, title, date, location, "Etkinlik", imageUrl, link));
         syncedCount++;
       }
     });
