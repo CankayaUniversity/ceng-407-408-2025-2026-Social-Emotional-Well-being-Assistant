@@ -2,17 +2,25 @@ const prisma = require("../src/prisma");
 
 const joinCommunityRoom = async (req, res) => {
   try {
-    const { userId, room } = req.body;
+    const { room } = req.body;
+    const userId = Number(req.user?.id);
 
-    if (!userId || !room) {
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "Yetkisiz işlem.",
+      });
+    }
+
+    if (!room) {
       return res.status(400).json({
         success: false,
-        error: "userId ve room alanları zorunludur.",
+        error: "room alanı zorunludur.",
       });
     }
 
     const normalizedRoom = String(room).trim();
-    const normalizedUserId = Number(userId);
+    const normalizedUserId = userId;
 
     let session = await prisma.communityRoomSession.findFirst({
       where: {
@@ -51,25 +59,47 @@ const joinCommunityRoom = async (req, res) => {
 
 const createMessage = async (req, res) => {
   try {
-    const { room, userId, username, message } = req.body;
+    const { room, message } = req.body;
+    const userId = Number(req.user?.id);
 
-    if (!room || !userId || !username || !message || !String(message).trim()) {
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "Yetkisiz işlem.",
+      });
+    }
+
+    if (!room || !message || !String(message).trim()) {
       return res.status(400).json({
         success: false,
-        error: "room, userId, username ve message alanları zorunludur.",
+        error: "room ve message alanları zorunludur.",
       });
     }
 
     const normalizedRoom = String(room).trim();
-    const normalizedUserId = Number(userId);
-    const normalizedUsername = String(username).trim();
+    const normalizedUserId = userId;
     const normalizedMessage = String(message).trim();
+
+    const user = await prisma.user.findUnique({
+      where: { id: normalizedUserId },
+      select: { name: true, email: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: "Kullanıcı bulunamadı.",
+      });
+    }
+
+    const resolvedUsername =
+      (user.name && String(user.name).trim()) || String(user.email).trim();
 
     const savedMessage = await prisma.communityMessage.create({
       data: {
         room: normalizedRoom,
         userId: normalizedUserId,
-        username: normalizedUsername,
+        username: resolvedUsername,
         message: normalizedMessage,
       },
     });
@@ -89,17 +119,25 @@ const createMessage = async (req, res) => {
 
 const getRoomMessages = async (req, res) => {
   try {
-    const { room, userId } = req.query;
+    const { room } = req.query;
+    const userId = Number(req.user?.id);
 
-    if (!room || !userId) {
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "Yetkisiz işlem.",
+      });
+    }
+
+    if (!room) {
       return res.status(400).json({
         success: false,
-        error: "room ve userId alanları zorunludur.",
+        error: "room alanı zorunludur.",
       });
     }
 
     const normalizedRoom = String(room).trim();
-    const normalizedUserId = Number(userId);
+    const normalizedUserId = userId;
 
     const latestSession = await prisma.communityRoomSession.findFirst({
       where: {
@@ -147,17 +185,25 @@ const getRoomMessages = async (req, res) => {
 
 const leaveCommunityRoom = async (req, res) => {
   try {
-    const { userId, room } = req.body;
+    const { room } = req.body;
+    const userId = Number(req.user?.id);
 
-    if (!userId || !room) {
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "Yetkisiz işlem.",
+      });
+    }
+
+    if (!room) {
       return res.status(400).json({
         success: false,
-        error: "userId ve room alanları zorunludur.",
+        error: "room alanı zorunludur.",
       });
     }
 
     const normalizedRoom = String(room).trim();
-    const normalizedUserId = Number(userId);
+    const normalizedUserId = userId;
 
     const activeSession = await prisma.communityRoomSession.findFirst({
       where: {
