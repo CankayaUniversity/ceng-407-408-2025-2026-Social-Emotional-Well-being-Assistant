@@ -12,10 +12,10 @@ class ChatItem {
   final ChatItemType type;
   final String? username;
   final String? message;
-  final String? room; // Restored room field for UI synchronization
+  final String? room;
   final DateTime createdAt;
   final int? userId;
-  final String? socketId; // For private chat requests
+  final String? socketId;
 
   ChatItem({
     required this.type,
@@ -42,7 +42,6 @@ class PrivateChatSession {
   PrivateChatSession({required this.room, required this.participants});
 }
 
-
 // --- Service ---
 
 class ChatService {
@@ -54,6 +53,8 @@ class ChatService {
   final StreamController<PrivateChatInvitation> _invitationController = StreamController.broadcast();
   final StreamController<PrivateChatSession> _privateChatStartedController = StreamController.broadcast();
 
+  // KRİTİK: Diğer dosyalardan erişim için public harita
+  final Map<int, String> userSocketIds = {};
 
   Stream<bool> get connectionStatus => _connectionStatusController.stream;
   Stream<ChatItem> get messages => _messageController.stream;
@@ -81,32 +82,40 @@ class ChatService {
     _socket!.onConnect((_) {
       debugPrint('ChatService: Connected');
       _connectionStatusController.add(true);
-      _socket?.emit('register-user', {
-        'userId': _currentUserId,
-        'username': _currentUsername,
-      });
     });
 
     _socket!.onDisconnect((_) {
       debugPrint('ChatService: Disconnected');
       _connectionStatusController.add(false);
+      userSocketIds.clear();
     });
 
     _socket!.on('new-message', (data) {
-       debugPrint("new-message received: $data");
+       // Socket ID takibi
+       if (data['userId'] != null && data['socketId'] != null) {
+         final int id = int.tryParse(data['userId'].toString()) ?? 0;
+         if (id != 0) userSocketIds[id] = data['socketId'].toString();
+       }
+
       _messageController.add(ChatItem(
         type: ChatItemType.message,
         message: data['message'],
         username: data['username'],
-        room: data['room'], // Restored room assignment
-        userId: data['userId'],
+        room: data['room'],
+        userId: data['userId'] is int ? data['userId'] : int.tryParse(data['userId']?.toString() ?? ''),
         socketId: data['socketId'],
         createdAt: DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),
       ));
     });
 
+    _socket!.on('user-joined', (data) {
+      if (data['userId'] != null && data['socketId'] != null) {
+        final int id = int.tryParse(data['userId'].toString()) ?? 0;
+        if (id != 0) userSocketIds[id] = data['socketId'].toString();
+      }
+    });
+
     _socket!.on('system-message', (data) {
-      debugPrint("system-message received: $data");
       _messageController.add(ChatItem(
         type: ChatItemType.system,
         message: data['message'],
@@ -115,19 +124,16 @@ class ChatService {
     });
 
     _socket!.on('private-chat-invitation', (data) {
-      debugPrint("private-chat-invitation received: $data");
       final parsedId = int.tryParse(data['requesterId']?.toString() ?? '') ?? 0;
-      if (parsedId == 0) {
-        return;
+      if (parsedId != 0) {
+        _invitationController.add(PrivateChatInvitation(
+          requesterId: parsedId,
+          requesterUsername: data['requesterUsername'],
+        ));
       }
-      _invitationController.add(PrivateChatInvitation(
-        requesterId: parsedId,
-        requesterUsername: data['requesterUsername'],
-      ));
     });
 
     _socket!.on('private-chat-started', (data) {
-       debugPrint("private-chat-started received: $data");
       _privateChatStartedController.add(PrivateChatSession(
         room: data['room'],
         participants: List<String>.from(data['participants']),
@@ -139,22 +145,12 @@ class ChatService {
 
   void joinRoom(String room, int userId, String username) {
     _currentRoom = room;
-    _socket?.emit('join-room', {
-      'room': room,
-      'userId': userId,
-      'username': username,
-    });
+    _socket?.emit('join-room', {'room': room, 'userId': userId, 'username': username});
   }
 
   void leaveRoom(String room, int userId, String username) {
-    if (_currentRoom == room) {
-      _currentRoom = null;
-    }
-    _socket?.emit('leave-room', {
-      'room': room,
-      'userId': userId,
-      'username': username,
-    });
+    if (_currentRoom == room) _currentRoom = null;
+    _socket?.emit('leave-room', {'room': room, 'userId': userId, 'username': username});
   }
 
   void sendMessage(String message, int userId, String username) {
@@ -167,29 +163,31 @@ class ChatService {
     });
   }
 
-  void sendPrivateChatRequest(String targetSocketId, {int? requesterId, String? requesterUsername}) {
-    final resolvedUserId = requesterId ?? _currentUserId;
-    final resolvedUsername = requesterUsername ?? _currentUsername;
-    _socket?.emit('private-chat-request', {
-      'targetSocketId': targetSocketId,
-      'requesterId': resolvedUserId,
-      'requesterUsername': resolvedUsername,
-    });
+  // Özel sohbet isteği (userId kullanarak)
+  void sendPrivateChatRequest(int targetUserId) {
+    // Servis içindeki canlı haritadan socketId bul
+    final String? socketId = userSocketIds[targetUserId];
+    
+    if (socketId != null) {
+      _socket?.emit('private-chat-request', {
+        'targetSocketId': socketId,
+        'requesterId': _currentUserId,
+        'requesterUsername': _currentUsername,
+      });
+    } else {
+      debugPrint('ChatService: Target user $targetUserId is not online.');
+    }
   }
 
   void acceptPrivateChat(int requesterId, {int? receiverId, String? receiverUsername}) {
-    final resolvedReceiverId = receiverId ?? _currentUserId;
-    final resolvedReceiverUsername = receiverUsername ?? _currentUsername;
     _socket?.emit('private-chat-accept', {
       'requesterId': requesterId,
-      'receiverId': resolvedReceiverId,
-      'receiverUsername': resolvedReceiverUsername,
+      'receiverId': receiverId ?? _currentUserId,
+      'receiverUsername': receiverUsername ?? _currentUsername,
     });
   }
 
-  void setCurrentRoom(String? room) {
-    _currentRoom = room;
-  }
+  void setCurrentRoom(String? room) => _currentRoom = room;
 
   void dispose() {
     _socket?.dispose();
