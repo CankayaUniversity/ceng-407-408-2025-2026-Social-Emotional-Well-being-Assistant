@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../config/app_config.dart';
+import '../api/token_store.dart';
 
 // --- Data Models ---
 
@@ -66,17 +67,26 @@ class ChatService {
   int? _currentUserId;
   String? _currentUsername;
 
-  void connect(int userId, String username) {
+  Future<void> connect(int userId, String username) async {
     _currentUserId = userId;
     _currentUsername = username;
+
+    final token = await TokenStore.get();
+    final query = <String, dynamic>{
+      'userId': userId,
+      'username': username,
+    };
+    if (token != null && token.isNotEmpty) {
+      query['token'] = token;
+    }
 
     _socket = IO.io(
         socketUrl,
         IO.OptionBuilder()
-            .setTransports(['websocket'])
-            .setQuery({'userId': userId, 'username': username})
-            .disableAutoConnect()
-            .build());
+          .setTransports(['websocket'])
+          .setQuery(query)
+          .disableAutoConnect()
+          .build());
 
     _socket!.onConnect((_) {
       debugPrint('ChatService: Connected');

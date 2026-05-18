@@ -137,7 +137,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
         await prefs.setStringList(userJoinedKey, joinedRooms);
       }
 
-      _initializeChatService();
+      await _initializeChatService();
       await _loadRooms();
       // Çevrimdışı mesajları kontrol et
       await _checkMessagesWhileAway();
@@ -256,10 +256,10 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     }
   }
 
-  void _initializeChatService() {
+  Future<void> _initializeChatService() async {
     if (_userId == null || _chatUsername == null) return;
 
-    _chatService.connect(_userId!, _chatUsername!);
+    await _chatService.connect(_userId!, _chatUsername!);
 
     _connectionSubscription = _chatService.connectionStatus.listen((isConnected) {
       _safeSetState(() {
