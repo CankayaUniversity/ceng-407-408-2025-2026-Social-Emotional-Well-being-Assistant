@@ -5,6 +5,7 @@ const auth = require("../middlewares/auth.middleware");
 const router = express.Router();
 
 router.get("/rooms", communityController.getOpenRooms);
+router.get("/joined", auth, communityController.getJoinedCommunityRooms);
 router.post("/join", auth, communityController.joinCommunityRoom);
 router.post("/messages", auth, communityController.createMessage);
 router.get("/messages", auth, communityController.getRoomMessages);

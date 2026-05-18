@@ -280,6 +280,51 @@ const getOpenRooms = async (req, res) => {
   }
 };
 
+const getJoinedCommunityRooms = async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "Yetkisiz işlem.",
+      });
+    }
+
+    const sessions = await prisma.communityRoomSession.findMany({
+      where: {
+        userId,
+        leftAt: null,
+      },
+      orderBy: {
+        joinedAt: "desc",
+      },
+      select: {
+        room: true,
+        joinedAt: true,
+      },
+    });
+
+    const rooms = sessions
+      .map((session) => ({
+        room: String(session.room || "").trim(),
+        joinedAt: session.joinedAt,
+      }))
+      .filter((entry) => entry.room.length > 0);
+
+    return res.status(200).json({
+      success: true,
+      rooms,
+    });
+  } catch (error) {
+    console.error("getJoinedCommunityRooms error:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Katıldığınız odalar alınamadı.",
+    });
+  }
+};
+
 const cleanupOldMessages = async (req, res) => {
   try {
     const cutoffDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -313,5 +358,6 @@ module.exports = {
   getRoomMessages,
   leaveCommunityRoom,
   getOpenRooms,
+  getJoinedCommunityRooms,
   cleanupOldMessages,
 };

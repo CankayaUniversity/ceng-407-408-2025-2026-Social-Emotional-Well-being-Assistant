@@ -9,7 +9,7 @@
     "migrate": "prisma migrate dev"
   },
   "dependencies": {
-    "@prisma/client": "^6.19.3",
+    "@prisma/client": "^6.19.2",
     "axios": "^1.16.0",
     "bcrypt": "^5.1.1",
     "cheerio": "^1.2.0",

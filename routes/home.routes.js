@@ -5,10 +5,6 @@ const homeController = require("../controllers/home.controller");
 
 const router = express.Router();
 
-// Preferences
-router.get("/preferences", auth, homeController.getPreferences);
-router.put("/preferences", auth, homeController.updatePreferences);
-
 // Emergency Contacts
 router.get("/emergency-contacts", auth, homeController.listEmergencyContacts);
 router.post("/emergency-contacts", auth, homeController.addEmergencyContact);

@@ -2,47 +2,6 @@
 const prisma = require("../src/prisma");
 
 // --------------------
-// Preferences
-// --------------------
-exports.getPreferences = async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    const prefs = await prisma.userPreferences.findUnique({
-      where: { userId },
-    });
-
-    // yoksa default dön
-    return res.json(prefs ?? { userId, selectedTabs: [] });
-  } catch (err) {
-    console.error("getPreferences error:", err);
-    return res.status(500).json({ message: "Server error" });
-  }
-};
-
-exports.updatePreferences = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { selectedTabs } = req.body;
-
-    if (!Array.isArray(selectedTabs)) {
-      return res.status(400).json({ message: "selectedTabs array olmalı" });
-    }
-
-    const updated = await prisma.userPreferences.upsert({
-      where: { userId },
-      update: { selectedTabs },
-      create: { userId, selectedTabs },
-    });
-
-    return res.json(updated);
-  } catch (err) {
-    console.error("updatePreferences error:", err);
-    return res.status(500).json({ message: "Server error" });
-  }
-};
-
-// --------------------
 // Emergency Contacts
 // --------------------
 exports.listEmergencyContacts = async (req, res) => {

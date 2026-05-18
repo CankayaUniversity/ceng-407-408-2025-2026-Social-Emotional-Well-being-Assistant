@@ -5,6 +5,7 @@ const homeRoutes = require("./home.routes");
 const communityRoutes = require("./community.routes");
 const eventsRoutes = require("./events.routes");
 
+const userController = require("../controllers/user.controller");
 const authMiddleware = require("../middlewares/auth.middleware");
 const authService = require("../services/auth.service");
 
@@ -17,6 +18,9 @@ router.use("/auth", authRoutes);
 router.use("/home", homeRoutes);
 router.use("/community", communityRoutes);
 router.use("/events", eventsRoutes);
+
+router.get("/user/profile", authMiddleware, userController.getProfilePreferences);
+router.put("/user/profile", authMiddleware, userController.updateProfile);
 
 /* =======================
    Protected Example Route

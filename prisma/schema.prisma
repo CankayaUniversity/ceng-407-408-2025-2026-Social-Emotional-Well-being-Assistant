@@ -19,13 +19,11 @@ model User {
 }
 
 model UserPreferences {
-  userId        Int    @id
-  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int    @id
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  selectedTabs  Json   @default("[]")
-
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  nickname    String? @default("Anonim")
+  isAnonymous Boolean @default(true)
 
   @@map("user_preferences")
 }
