@@ -18,8 +18,6 @@ class CommunityRoomsScreen extends StatefulWidget {
   State<CommunityRoomsScreen> createState() => _CommunityRoomsScreenState();
 }
 
-enum RoomMembershipStatus { none, joined, left }
-
 class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   static const String backendBaseUrl = AppConfig.backendBaseUrl;
 
@@ -41,7 +39,9 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   final List<String> _allRooms = [];
   List<String> _filteredRooms = [];
 
+  // Oda bazlı kullanıcı durumu
   final Map<String, RoomMembershipStatus> _roomStatuses = {};
+  // Kullanıcının katıldığı odaların listesi (Hafıza için)
   final Set<String> _myJoinedRooms = {};
 
   bool _connected = false;
@@ -54,11 +54,16 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   bool _leavingRoom = false;
 
   int? _userId;
+
   String? _realUsername;
   String? _chatUsername;
+
   bool _anonymousMode = false;
   String? _nickname;
+
+  // Şu an chat ekranında açık olan oda
   String? _currentRoom;
+
   String? _initError;
 
   @override
@@ -83,7 +88,9 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
 
   Future<void> _initializeScreen() async {
     try {
+      // Bildirim servisini başlat
       await NotificationService().init();
+
       final CurrentUser? user = await TokenStore.getCurrentUser();
       final prefs = await SharedPreferences.getInstance();
 
@@ -96,56 +103,29 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
         return;
       }
 
-      String remoteNickname = '';
-      bool remoteAnonymousMode = true;
-      List<String> joinedRooms = [];
+      // Kullanıcıya özel nickname ve anonim modu yükle
+      final anonymousMode = prefs.getBool(_anonymousModeKey) ?? true;
+      final nickname = (prefs.getString(_nicknameKey) ?? '').trim();
 
-      try {
-        final profileRes = await ApiClient.get('/user/profile');
-        if (profileRes.statusCode == 200) {
-          final data = jsonDecode(profileRes.body);
-          remoteNickname = (data['nickname'] ?? '').toString();
-          remoteAnonymousMode = data['anonymous_mode'] ?? true;
-          await prefs.setString("${_nicknameKey}_${user.username}", remoteNickname);
-          await prefs.setBool("${_anonymousModeKey}_${user.username}", remoteAnonymousMode);
-        } else {
-          remoteAnonymousMode = prefs.getBool("${_anonymousModeKey}_${user.username}") ?? true;
-          remoteNickname = (prefs.getString("${_nicknameKey}_${user.username}") ?? '').trim();
-        }
-      } catch (_) {
-        remoteAnonymousMode = prefs.getBool("${_anonymousModeKey}_${user.username}") ?? true;
-        remoteNickname = (prefs.getString("${_nicknameKey}_${user.username}") ?? '').trim();
-      }
-
-      try {
-        final roomsRes = await ApiClient.get('/community/my-rooms');
-        if (roomsRes.statusCode == 200) {
-          final data = jsonDecode(roomsRes.body);
-          joinedRooms = List<String>.from(data['rooms'] ?? []);
-          await prefs.setStringList('${_joinedRoomsKey}_${user.id}', joinedRooms);
-        } else {
-          joinedRooms = prefs.getStringList('${_joinedRoomsKey}_${user.id}') ?? [];
-        }
-      } catch (_) {
-        joinedRooms = prefs.getStringList('${_joinedRoomsKey}_${user.id}') ?? [];
-      }
-
-      final resolvedChatName = remoteAnonymousMode
-          ? (remoteNickname.isNotEmpty ? remoteNickname : 'Anonim')
+      final resolvedChatName = anonymousMode
+          ? (nickname.isNotEmpty ? nickname : 'Anonim')
           : user.username;
 
       _safeSetState(() {
         _userId = user.id;
         _realUsername = user.username;
         _chatUsername = resolvedChatName;
-        _anonymousMode = remoteAnonymousMode;
-        _nickname = remoteNickname;
+        _anonymousMode = anonymousMode;
+        _nickname = nickname;
         _userReady = true;
         _loadingUser = false;
         _initError = null;
 
+        // Kullanıcıya özel katılmış odaları yükle
         _myJoinedRooms.clear();
-        for (final room in joinedRooms) {
+        final String userJoinedKey = '${_joinedRoomsKey}_${user.id}';
+        final List<String> savedJoinedRooms = prefs.getStringList(userJoinedKey) ?? [];
+        for (final room in savedJoinedRooms) {
           _myJoinedRooms.add(room);
           _roomStatuses[_normalizeRoomKey(room)] = RoomMembershipStatus.joined;
         }
@@ -153,8 +133,10 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
 
       _initializeChatService();
       await _loadRooms();
+      // Çevrimdışı mesajları kontrol et
       await _checkMessagesWhileAway();
     } catch (e) {
+      debugPrint('INIT ERROR: $e');
       _safeSetState(() {
         _loadingUser = false;
         _loadingRooms = false;
@@ -163,6 +145,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     }
   }
 
+  // Çevrimdışı mesaj bildirimi (Catch-up)
   Future<void> _checkMessagesWhileAway() async {
     if (_userId == null) return;
     final prefs = await SharedPreferences.getInstance();
@@ -171,7 +154,9 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     for (final room in _myJoinedRooms) {
       final key = _normalizeRoomKey(room);
       final lastSeenStr = prefs.getString('last_seen_${_userId}_$key');
-      final lastSeen = lastSeenStr != null ? DateTime.tryParse(lastSeenStr) ?? DateTime.fromMillisecondsSinceEpoch(0) : DateTime.fromMillisecondsSinceEpoch(0);
+      final lastSeen = lastSeenStr != null
+          ? DateTime.tryParse(lastSeenStr) ?? DateTime.fromMillisecondsSinceEpoch(0)
+          : DateTime.fromMillisecondsSinceEpoch(0);
 
       try {
         final response = await ApiClient.get('/community/messages?userId=$_userId&room=$room');
@@ -190,10 +175,15 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     }
 
     if (totalNew > 0) {
-      NotificationService().showNotification(id: 999, title: 'Community Rooms', body: 'Hoş geldin! Sen yokken $totalNew yeni mesaj geldi.');
+      NotificationService().showNotification(
+        id: 999,
+        title: 'Community Rooms',
+        body: 'Hoş geldin! Sen yokken $totalNew yeni mesaj geldi.',
+      );
     }
   }
 
+  // Okundu bilgisi güncelleme
   Future<void> _updateLastSeen(String room) async {
     if (_userId == null) return;
     final prefs = await SharedPreferences.getInstance();
@@ -201,6 +191,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     await prefs.setString('last_seen_${_userId}_$key', DateTime.now().toIso8601String());
   }
 
+  // Hafızaya kaydetme yardımcısı
   Future<void> _persistJoinedRooms() async {
     if (_userId == null) return;
     final prefs = await SharedPreferences.getInstance();
@@ -239,11 +230,15 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
 
   void _initializeChatService() {
     if (_userId == null || _chatUsername == null) return;
+
     _chatService.connect(_userId!, _chatUsername!);
 
     _connectionSubscription = _chatService.connectionStatus.listen((isConnected) {
-      _safeSetState(() { _connected = isConnected; });
+      _safeSetState(() {
+        _connected = isConnected;
+      });
       if (isConnected) {
+        // Katıldığımız tüm odalara socket üzerinden bağlan
         for (final room in _myJoinedRooms) {
           _chatService.joinRoom(room, _userId!, _chatUsername!);
         }
@@ -251,15 +246,14 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     });
 
     _messageSubscription = _chatService.messages.listen((chatItem) {
-      final msgRoom = chatItem.room;
+      final msgRoom = chatItem.room; // Use the room from the message itself
+      final sender = chatItem.username ?? 'Bilinmeyen';
+      final messageText = chatItem.message ?? '';
       final senderId = chatItem.userId;
 
       if (_joined && msgRoom != null && _normalizeRoomKey(_currentRoom!) == _normalizeRoomKey(msgRoom)) {
-        _safeSetState(() { 
+        _safeSetState(() {
           _items.add(chatItem);
-          if (senderId != null && chatItem.socketId != null) {
-            _chatService.userSocketIds[senderId] = chatItem.socketId!;
-          }
         });
         _updateLastSeen(msgRoom);
       } else {
@@ -267,7 +261,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
           NotificationService().showNotification(
             id: Random().nextInt(100000),
             title: msgRoom ?? 'Yeni Mesaj',
-            body: '${chatItem.username}: ${chatItem.message}',
+            body: '$sender: $messageText',
           );
         }
       }
@@ -285,7 +279,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
         _items.clear();
         _items.add(ChatItem(
           type: ChatItemType.system,
-          message: 'Özel sohbet başladı.',
+          message: 'Özel sohbet başladı. Katılımcılar: ${session.participants.join(', ')}',
           createdAt: DateTime.now(),
         ));
       });
@@ -297,12 +291,16 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Özel Sohbet Daveti'),
-        content: Text('${invitation.requesterUsername} sizinle özel bir sohbet başlatmak istiyor.'),
+        content: Text('${invitation.requesterUsername} sizinle özel bir sohbet başlatmak istiyor. Kabul ediyor musunuz?'),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Reddet')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Reddet'),
+          ),
           TextButton(
             onPressed: () {
-              _chatService.acceptPrivateChat(invitation.requesterId);
+              _chatService.acceptPrivateChat(invitation.requesterId,
+                  receiverId: _userId, receiverUsername: _chatUsername);
               Navigator.of(context).pop();
             },
             child: const Text('Kabul Et'),
@@ -316,7 +314,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     _safeSetState(() { _loadingRooms = true; });
     try {
       final response = await ApiClient.get('/community/rooms');
-      if (response.statusCode == 200) {
+      if (response.statusCode >= 200 && response.statusCode < 300) {
         final decoded = jsonDecode(response.body);
         List<String> rooms = [];
         if (decoded is Map && decoded['rooms'] is List) {
@@ -329,13 +327,18 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
             final key = _normalizeRoomKey(room);
             if (_myJoinedRooms.any((r) => _normalizeRoomKey(r) == key)) {
               _roomStatuses[key] = RoomMembershipStatus.joined;
+            } else if (_roomStatuses[key] != RoomMembershipStatus.left) {
+              _roomStatuses.putIfAbsent(key, () => RoomMembershipStatus.none);
             }
           }
           _filteredRooms = List<String>.from(_allRooms);
           _loadingRooms = false;
         });
+        return;
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('ROOMS LOAD ERROR: $e');
+    }
     _safeSetState(() { _loadingRooms = false; });
   }
 
@@ -353,12 +356,22 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   Future<void> _createRoom() async {
     final roomName = _createRoomController.text.trim();
     if (roomName.isEmpty) return;
+
+    if (_allRooms.any((room) => _normalizeRoomKey(room) == _normalizeRoomKey(roomName))) {
+      _createRoomController.clear();
+      _searchController.text = roomName;
+      _filterRooms(roomName);
+      return;
+    }
+
     _safeSetState(() {
       _ensureRoomExistsInList(roomName);
       _setRoomStatus(roomName, RoomMembershipStatus.joined);
       _filteredRooms = List<String>.from(_allRooms);
     });
+
     _createRoomController.clear();
+    _searchController.clear();
     await _joinRoom(roomName, isNewRoom: true);
   }
 
@@ -372,59 +385,111 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
         _safeSetState(() {
           _items.clear();
           for (final item in messages) {
-            final int? uId = item['userId'] is int ? item['userId'] : int.tryParse(item['userId']?.toString() ?? '');
-            final String? sId = item['socketId']?.toString();
-            if (uId != null && sId != null) {
-              _chatService.userSocketIds[uId] = sId;
-            }
             _items.add(ChatItem(
               type: ChatItemType.message,
               username: (item['username'] ?? 'Bilinmeyen').toString(),
               message: (item['message'] ?? '').toString(),
-              room: room, 
+              room: room, // Populate room
               createdAt: DateTime.tryParse(item['createdAt']?.toString() ?? '') ?? DateTime.now(),
-              userId: uId,
-              socketId: sId,
+              userId: int.tryParse(item['userId']?.toString() ?? ''),
+              socketId: item['socketId']?.toString(),
             ));
           }
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('REFRESH MESSAGES ERROR: $e');
+    }
   }
 
   Future<void> _joinRoom(String room, {bool isNewRoom = false}) async {
-    if (_userId == null || _chatUsername == null) return;
-    _safeSetState(() { _joiningRoom = true; _currentRoom = room; });
-    try {
-      await _refreshMessagesForRoom(room);
-      _chatService.joinRoom(room, _userId!, _chatUsername!);
-      _setRoomStatus(room, RoomMembershipStatus.joined);
-      _updateLastSeen(room);
-      _safeSetState(() { _joined = true; _joiningRoom = false; });
-    } catch (_) {
-      _safeSetState(() { _joiningRoom = false; });
+    if (_joiningRoom || _leavingRoom) return;
+    final trimmedRoom = room.trim();
+    if (trimmedRoom.isEmpty || _userId == null) return;
+
+    // ALWAYS inform the service that we are switching/joining this room
+    _chatService.joinRoom(trimmedRoom, _userId!, _chatUsername!);
+
+    if (_currentRoom != null && _normalizeRoomKey(_currentRoom!) == _normalizeRoomKey(trimmedRoom) && _getRoomStatus(trimmedRoom) == RoomMembershipStatus.joined) {
+      await _refreshMessagesForRoom(trimmedRoom);
+      _safeSetState(() { _joined = true; });
+      return;
     }
+
+    _joiningRoom = true;
+    try {
+      // 1. Tell the backend we are joining (Critical for message persistence)
+      await ApiClient.post('/community/join', {'userId': _userId, 'room': trimmedRoom});
+
+      // 2. Fetch historical messages
+      final msgRes = await ApiClient.get('/community/messages?userId=$_userId&room=$trimmedRoom');
+      final decoded = jsonDecode(msgRes.body);
+      final List<dynamic> messages = (decoded is List) ? decoded : (decoded['messages'] is List ? decoded['messages'] : []);
+
+      _safeSetState(() {
+        _currentRoom = trimmedRoom;
+        _joined = true;
+        _items.clear();
+        _setRoomStatus(trimmedRoom, RoomMembershipStatus.joined);
+        for (final item in messages) {
+          _items.add(ChatItem(
+            type: ChatItemType.message,
+            username: (item['username'] ?? 'Bilinmeyen').toString(),
+            message: (item['message'] ?? '').toString(),
+            room: trimmedRoom, // Populate room
+            createdAt: DateTime.tryParse(item['createdAt']?.toString() ?? '') ?? DateTime.now(),
+            userId: int.tryParse(item['userId']?.toString() ?? ''),
+            socketId: item['socketId']?.toString(),
+          ));
+        }
+        _filteredRooms = List<String>.from(_allRooms);
+      });
+      _updateLastSeen(trimmedRoom);
+    } catch (e) {
+      debugPrint('JOIN ERROR: $e');
+    } finally {
+      _joiningRoom = false;
+    }
+  }
+
+  void _backToRoomBrowser() {
+    if (_currentRoom != null) {
+      _updateLastSeen(_currentRoom!);
+    }
+    _safeSetState(() {
+      _joined = false;
+      _messageController.clear();
+    });
   }
 
   Future<void> _leaveRoom({String? roomName}) async {
     final roomToLeave = roomName ?? _currentRoom;
-    if (_userId == null || roomToLeave == null) return;
+    if (_leavingRoom || roomToLeave == null) return;
     _leavingRoom = true;
     try {
+      // 1. Tell backend we are leaving
       await ApiClient.post('/community/leave', {'userId': _userId, 'room': roomToLeave});
+
+      // 2. Tell socket service
       _chatService.leaveRoom(roomToLeave, _userId!, _chatUsername!);
-      _setRoomStatus(roomToLeave, RoomMembershipStatus.left);
+
       _safeSetState(() {
         if (roomName == null) {
           _joined = false;
           _items.clear();
+        }
+        if (!roomToLeave.startsWith('private-')) {
+          _setRoomStatus(roomToLeave, RoomMembershipStatus.left);
+        }
+        if (roomName == null) {
           _currentRoom = null;
         }
         _filteredRooms = List<String>.from(_allRooms);
-        _leavingRoom = false;
       });
-    } catch (_) {
-      _safeSetState(() { _leavingRoom = false; });
+    } catch (e) {
+      debugPrint('LEAVE ERROR: $e');
+    } finally {
+      _leavingRoom = false;
     }
   }
 
@@ -436,27 +501,32 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   }
 
   void _showRoomUsers() {
-    final Map<int, String> uniqueUsersMap = {};
-    for (var item in _items) {
-      if (item.type == ChatItemType.message && item.userId != null && item.userId != _userId) {
-        uniqueUsersMap[item.userId!] = item.username ?? 'Bilinmeyen';
+    // This is a placeholder for fetching users in a room.
+    // In a real app, you'd need an API endpoint to get users for a room.
+    // For now, we'll use the users from the messages in the chat.
+    final roomUsers = _items
+        .where((item) => item.type == ChatItemType.message && item.userId != _userId)
+        .map((item) =>
+            {'username': item.username, 'userId': item.userId, 'socketId': item.socketId})
+        .toList();
+
+    final uniqueUsers = <String, Map<String, dynamic>>{};
+    for (var user in roomUsers) {
+      if (user['username'] != null) {
+        uniqueUsers[user['username'] as String] = user;
       }
     }
+
     showModalBottomSheet(
       context: context,
       builder: (context) {
-        if (uniqueUsersMap.isEmpty) return const SizedBox(height: 100, child: Center(child: Text('Odada etkileşimde bulunan kimse yok.')));
         return ListView(
-          children: uniqueUsersMap.entries.map((entry) {
-            final int userId = entry.key;
-            final bool isOnline = _chatService.userSocketIds.containsKey(userId);
+          children: uniqueUsers.values.map((user) {
             return ListTile(
-              leading: Icon(Icons.circle, color: isOnline ? Colors.green : Colors.grey, size: 12),
-              title: Text(entry.value),
-              subtitle: Text(isOnline ? 'Çevrimiçi' : 'Şu an ulaşılamıyor (Mesaj bekleniyor)'),
+              title: Text(user['username']),
               onTap: () {
                 Navigator.pop(context);
-                _showPrivateChatRequestDialog(entry.value, userId);
+                _showPrivateChatRequestDialog(user['username'], user['socketId']);
               },
             );
           }).toList(),
@@ -465,19 +535,32 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     );
   }
 
-  void _showPrivateChatRequestDialog(String username, int userId) {
+  void _showPrivateChatRequestDialog(String username, String? socketId) {
+    if (socketId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot start private chat. User is not available.')),
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Özel Sohbet'),
+        title: const Text('Private Chat'),
         content: Text('$username ile özel sohbet başlatmak istiyor musunuz?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('İptal')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('İptal'),
+          ),
           TextButton(
             onPressed: () {
-              _chatService.sendPrivateChatRequest(userId);
+              _chatService.sendPrivateChatRequest(socketId,
+                  requesterId: _userId, requesterUsername: _chatUsername);
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('İstek gönderildi.')));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Özel sohbet isteği gönderildi.')),
+              );
             },
             child: const Text('Gönder'),
           ),
@@ -486,18 +569,19 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     );
   }
 
-  void _backToRoomBrowser() {
-    if (_currentRoom != null) _updateLastSeen(_currentRoom!);
-    _safeSetState(() { _joined = false; _messageController.clear(); });
-  }
-
   @override
   Widget build(BuildContext context) {
     const navy = Color(0xFF2B3A67);
+    const mint = Color(0xFFD6E5E3);
     const gold = Color(0xFFFFE6A7);
-    if (_loadingUser) return const Scaffold(body: Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(navy))));
+
+    if (_loadingUser) return const Scaffold(backgroundColor: mint, body: Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(navy))));
+
     return WillPopScope(
-      onWillPop: () async { if (_joined) { _backToRoomBrowser(); return false; } return true; },
+      onWillPop: () async {
+        if (_joined) { _backToRoomBrowser(); return false; }
+        return true;
+      },
       child: Scaffold(
         backgroundColor: const Color(0xFFF8F9FB),
         appBar: AppBar(
@@ -506,17 +590,43 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
           leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () { if (_joined) _backToRoomBrowser(); else Navigator.pop(context); }),
           title: Text(_joined ? (_currentRoom ?? 'Chat') : 'Community Rooms', style: const TextStyle(fontWeight: FontWeight.w900)),
           actions: [
-            if (_joined) IconButton(icon: const Icon(Icons.people, color: gold), onPressed: _showRoomUsers),
+            if (_joined && !_currentRoom!.startsWith('private-'))
+              IconButton(
+                icon: const Icon(Icons.people, color: gold),
+                onPressed: _showRoomUsers,
+              ),
             Padding(padding: const EdgeInsets.only(right: 12), child: Center(child: Text(_connected ? 'ÇEVRİMİÇİ' : 'ÇEVRİMDIŞI', style: TextStyle(color: _connected ? Colors.greenAccent : Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 10)))),
             Padding(padding: const EdgeInsets.only(right: 16), child: Center(child: Text(_chatUsername ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: gold)))),
           ],
         ),
-        body: _joined ? _buildChatRoom(navy, gold) : _buildRoomBrowser(navy, gold),
+        body: _joined ? _buildChatRoom(navy, mint, gold) : _buildRoomBrowser(navy, mint, gold),
       ),
     );
   }
 
-  Widget _buildRoomBrowser(Color navy, Color gold) {
+  Widget _buildStatusBadge(String room, Color navy, Color gold) {
+    final status = _getRoomStatus(room);
+
+    if (status == RoomMembershipStatus.joined) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(color: navy.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: navy.withOpacity(0.3))),
+        child: Text('Joined', style: TextStyle(color: navy, fontSize: 12, fontWeight: FontWeight.w900)),
+      );
+    }
+
+    if (status == RoomMembershipStatus.left) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.red.withOpacity(0.3))),
+        child: Text('Left', style: TextStyle(color: Colors.red.shade700, fontSize: 12, fontWeight: FontWeight.w900)),
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildRoomBrowser(Color navy, Color mint, Color gold) {
     return Column(
       children: [
         Padding(
@@ -560,6 +670,8 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
             ],
           ),
         ),
+
+        const SizedBox(height: 10),
         Expanded(
           child: _loadingRooms ? Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(navy))) : ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -580,11 +692,17 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
                 child: ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   leading: Container(
-                    width: 50, height: 50,
+                    width: 50,
+                    height: 50,
                     decoration: BoxDecoration(color: navy.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
                     child: Icon(Icons.groups_rounded, color: navy),
                   ),
                   title: Text(room, style: TextStyle(fontWeight: FontWeight.w900, color: navy, fontSize: 16)),
+                  subtitle: Row(
+                    children: [
+                      Text("Aktif Grup", style: TextStyle(fontWeight: FontWeight.w700, color: navy.withOpacity(0.4), fontSize: 12)),
+                    ],
+                  ),
                   trailing: GestureDetector(
                     onTap: () {
                       if (isJoined) {
@@ -620,7 +738,27 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     );
   }
 
-  Widget _buildChatRoom(Color navy, Color gold) {
+  Widget _categoryChip(String label, bool isSelected, Color navy, Color gold) {
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: isSelected ? navy : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isSelected ? navy : navy.withOpacity(0.1)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? Colors.white : navy.withOpacity(0.6),
+          fontWeight: FontWeight.w800,
+          fontSize: 13,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatRoom(Color navy, Color mint, Color gold) {
     return Column(
       children: [
         Expanded(
@@ -710,4 +848,11 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
       ],
     );
   }
+}
+
+
+enum RoomMembershipStatus {
+  none,
+  joined,
+  left,
 }
