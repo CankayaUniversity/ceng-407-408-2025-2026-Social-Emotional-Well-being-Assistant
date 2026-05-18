@@ -94,6 +94,14 @@ const getPrivateInviteBucket = (receiverSocketId) => {
 io.on("connection", (socket) => {
   logMessage(`[CONNECT] (${socket.id})`);
 
+  const handshakeToken =
+    socket.handshake?.auth?.token || socket.handshake?.query?.token;
+  const normalizedToken =
+    typeof handshakeToken === "string" ? handshakeToken.trim() : "";
+  if (normalizedToken) {
+    socket.data.authToken = normalizedToken;
+  }
+
   socket.on("register-user", (payload = {}) => {
     try {
       const userId = Number(payload.userId ?? socket.data.userId ?? 0);
@@ -327,9 +335,12 @@ io.on("connection", (socket) => {
       logMessage("POST URL:", `${BACKEND_URL}/community/messages`);
       logMessage("POST PAYLOAD:", payload);
 
+      const authToken = socket.data.authToken;
+      const headers = authToken ? { Authorization: `Bearer ${authToken}` } : {};
       const response = await axios.post(
-      `${BACKEND_URL}/api/community/messages`,
-        payload
+        `${BACKEND_URL}/api/community/messages`,
+        payload,
+        { headers }
       );
 
       const savedMessage = response.data.message ?? response.data;
