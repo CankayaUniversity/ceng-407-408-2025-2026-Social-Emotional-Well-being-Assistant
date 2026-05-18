@@ -111,6 +111,11 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
           ? (nickname.isNotEmpty ? nickname : 'Anonim')
           : user.username;
 
+      final String userJoinedKey = '${_joinedRoomsKey}_${user.id}';
+      final List<String> savedJoinedRooms = prefs.getStringList(userJoinedKey) ?? [];
+      final List<String>? remoteJoinedRooms = await _fetchRemoteJoinedRooms();
+      final List<String> joinedRooms = remoteJoinedRooms ?? savedJoinedRooms;
+
       _safeSetState(() {
         _userId = user.id;
         _realUsername = user.username;
@@ -121,15 +126,16 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
         _loadingUser = false;
         _initError = null;
 
-        // Kullanıcıya özel katılmış odaları yükle
         _myJoinedRooms.clear();
-        final String userJoinedKey = '${_joinedRoomsKey}_${user.id}';
-        final List<String> savedJoinedRooms = prefs.getStringList(userJoinedKey) ?? [];
-        for (final room in savedJoinedRooms) {
+        for (final room in joinedRooms) {
           _myJoinedRooms.add(room);
           _roomStatuses[_normalizeRoomKey(room)] = RoomMembershipStatus.joined;
         }
       });
+
+      if (remoteJoinedRooms != null) {
+        await prefs.setStringList(userJoinedKey, joinedRooms);
+      }
 
       _initializeChatService();
       await _loadRooms();
@@ -189,6 +195,28 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     final prefs = await SharedPreferences.getInstance();
     final key = _normalizeRoomKey(room);
     await prefs.setString('last_seen_${_userId}_$key', DateTime.now().toIso8601String());
+  }
+
+  Future<List<String>?> _fetchRemoteJoinedRooms() async {
+    try {
+      final response = await ApiClient.get('/community/joined');
+      if (response.statusCode != 200) return null;
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map && decoded['rooms'] is List) {
+        return (decoded['rooms'] as List)
+            .map((e) => e is Map ? (e['room'] ?? e['name'] ?? '').toString() : e.toString())
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
+      }
+      if (decoded is List) {
+        return decoded.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+      }
+    } catch (e) {
+      debugPrint('FETCH REMOTE JOINED ROOMS FAILED: $e');
+    }
+    return null;
   }
 
   // Hafızaya kaydetme yardımcısı

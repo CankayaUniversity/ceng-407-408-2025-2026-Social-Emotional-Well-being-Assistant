@@ -1,9 +1,12 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import 'package:ui_prototype/core/api/api_client.dart';
 
 import 'data/emergency_contact_store.dart';
 import '../chat/data/chat_store.dart';
@@ -66,19 +69,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadProfilePrefs() async {
     final prefs = await SharedPreferences.getInstance();
+    final remotePrefs = await _fetchRemoteProfilePrefs();
 
-    final anonymousMode = prefs.getBool(_anonymousModeKey) ?? true;
-    final savedNickname = (prefs.getString(_nicknameKey) ?? '').trim();
+    final anonymousMode =
+        remotePrefs?['isAnonymous'] as bool? ?? prefs.getBool(_anonymousModeKey) ?? true;
+    final savedNickname = (remotePrefs?['nickname'] as String? ?? prefs.getString(_nicknameKey) ?? '').trim();
     final savedAge = prefs.getString(_ageKey) ?? '';
     final savedCity = prefs.getString(_cityKey) ?? '';
     final savedNotes = prefs.getString(_notesKey) ?? '';
     final moodReminder = prefs.getBool(_moodReminderKey) ?? true;
-    final crisisNotifications =
-        prefs.getBool('isNotificationEnabled') ?? true;
+    final crisisNotifications = prefs.getBool('isNotificationEnabled') ?? true;
 
     _anonymousMode = anonymousMode;
     _moodReminder = moodReminder;
     _crisisNotifications = crisisNotifications;
+
+    if (remotePrefs != null) {
+      await prefs.setBool(_anonymousModeKey, _anonymousMode);
+      await prefs.setString(_nicknameKey, savedNickname);
+    }
 
     _nicknameController.text = savedNickname.isNotEmpty
         ? savedNickname
@@ -92,6 +101,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() {
         _loadingPrefs = false;
       });
+    }
+  }
+
+  Future<Map<String, dynamic>?> _fetchRemoteProfilePrefs() async {
+    try {
+      final response = await ApiClient.get('/user/profile');
+      if (response.statusCode != 200) {
+        return null;
+      }
+
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      if (body['success'] != true) {
+        return null;
+      }
+
+      return (body['preferences'] as Map<String, dynamic>?)?.map((key, value) => MapEntry(key, value));
+    } catch (error) {
+      debugPrint('Remote profile load failed: $error');
+      return null;
     }
   }
 
@@ -119,11 +147,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _saveAnonymousMode(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_anonymousModeKey, value);
+    await _syncRemoteProfile(nickname: _nicknameController.text.trim(), anonymousMode: value);
   }
 
   Future<void> _saveNickname(String value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_nicknameKey, value.trim());
+    await _syncRemoteProfile(nickname: value.trim(), anonymousMode: _anonymousMode);
   }
 
   Future<void> _saveAge(String value) async {
@@ -144,6 +174,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _saveMoodReminder(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_moodReminderKey, value);
+  }
+
+  Future<void> _syncRemoteProfile({required String nickname, required bool anonymousMode}) async {
+    try {
+      final response = await ApiClient.put(
+        '/user/profile',
+        {
+          'nickname': nickname.isEmpty ? (_anonymousMode ? 'Anonim' : _realName) : nickname,
+          'anonymous_mode': anonymousMode,
+        },
+      );
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        debugPrint('Remote profile save failed: ${response.statusCode} ${response.body}');
+      }
+    } catch (error) {
+      debugPrint('Remote profile save error: $error');
+    }
   }
 
   Future<void> _saveCrisisNotifications(bool value) async {
