@@ -30,8 +30,8 @@ class GlobalChatService {
     _userId = user.id;
     final prefs = await SharedPreferences.getInstance();
     
-    final nickname = (prefs.getString('user_nickname_${user.id}') ?? '').trim();
-    _chatUsername = nickname.isNotEmpty ? nickname : user.username;
+    final nickname = (prefs.getString('user_nickname') ?? '').trim();
+    _chatUsername = nickname.isNotEmpty ? nickname : 'Anonim';
 
     final savedRooms = prefs.getStringList('${_joinedRoomsKey}_${user.id}') ?? [];
     _myJoinedRooms.addAll(savedRooms);
