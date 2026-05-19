@@ -126,13 +126,19 @@ class ChatService {
 
     _socket!.on('private-chat-invitation', (data) {
       debugPrint("private-chat-invitation received: $data");
-      final parsedId = int.tryParse(data['requesterId']?.toString() ?? '') ?? 0;
+      final payload = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+      final requesterIdValue = payload['requesterId'] ??
+          payload['requesterID'] ??
+          payload['requesterUserId'] ??
+          payload['userId'];
+      final parsedId = int.tryParse(requesterIdValue?.toString() ?? '') ?? 0;
       if (parsedId == 0) {
         return;
       }
+      final requesterUsername = (payload['requesterUsername'] ?? payload['username'] ?? payload['requesterName'])?.toString();
       _invitationController.add(PrivateChatInvitation(
         requesterId: parsedId,
-        requesterUsername: data['requesterUsername'],
+        requesterUsername: requesterUsername ?? 'Bilinmeyen',
       ));
     });
 

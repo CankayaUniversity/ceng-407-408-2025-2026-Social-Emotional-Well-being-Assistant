@@ -313,6 +313,9 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   }
 
   void _showPrivateChatInvitation(PrivateChatInvitation invitation) {
+    if (!mounted) {
+      return;
+    }
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
