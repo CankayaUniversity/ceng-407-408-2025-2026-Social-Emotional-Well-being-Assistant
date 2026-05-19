@@ -59,7 +59,7 @@ const joinCommunityRoom = async (req, res) => {
 
 const createMessage = async (req, res) => {
   try {
-    const { room, message } = req.body;
+    const { room, message, username } = req.body;
     const userId = Number(req.user?.id);
 
     if (!userId) {
@@ -73,6 +73,13 @@ const createMessage = async (req, res) => {
       return res.status(400).json({
         success: false,
         error: "room ve message alanları zorunludur.",
+      });
+    }
+
+    if (!username || !String(username).trim()) {
+      return res.status(400).json({
+        success: false,
+        error: "username alanı zorunludur.",
       });
     }
 
@@ -92,8 +99,7 @@ const createMessage = async (req, res) => {
       });
     }
 
-    const resolvedUsername =
-      (user.name && String(user.name).trim()) || String(user.email).trim();
+    const resolvedUsername = String(username).trim();
 
     const savedMessage = await prisma.communityMessage.create({
       data: {
@@ -169,10 +175,33 @@ const getRoomMessages = async (req, res) => {
       },
     });
 
+    const userIds = [...new Set(messages.map((msg) => msg.userId))];
+    const preferences = await prisma.userPreferences.findMany({
+      where: {
+        userId: { in: userIds },
+      },
+      select: {
+        userId: true,
+        nickname: true,
+      },
+    });
+
+    const nicknameByUserId = new Map(
+      preferences.map((pref) => [pref.userId, pref.nickname]),
+    );
+
+    const sanitizedMessages = messages.map((msg) => {
+      const nickname = nicknameByUserId.get(msg.userId);
+      return {
+        ...msg,
+        username: (nickname && String(nickname).trim()) || "Anonim",
+      };
+    });
+
     return res.status(200).json({
       success: true,
       joinedAt: latestSession.joinedAt,
-      messages,
+      messages: sanitizedMessages,
     });
   } catch (error) {
     console.error("getRoomMessages error:", error);
