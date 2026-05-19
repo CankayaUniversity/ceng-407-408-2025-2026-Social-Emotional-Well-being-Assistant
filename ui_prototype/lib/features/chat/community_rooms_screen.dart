@@ -538,9 +538,25 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
 
     final uniqueUsers = <String, Map<String, dynamic>>{};
     for (var user in roomUsers) {
-      if (user['username'] != null) {
-        uniqueUsers[user['username'] as String] = user;
+      final username = user['username']?.toString().trim();
+      if (username == null || username.isEmpty) {
+        continue;
       }
+
+      final existing = uniqueUsers[username];
+      if (existing == null) {
+        uniqueUsers[username] = user;
+        continue;
+      }
+
+      final merged = Map<String, dynamic>.from(existing);
+      if (merged['socketId'] == null && user['socketId'] != null) {
+        merged['socketId'] = user['socketId'];
+      }
+      if (merged['userId'] == null && user['userId'] != null) {
+        merged['userId'] = user['userId'];
+      }
+      uniqueUsers[username] = merged;
     }
 
     showModalBottomSheet(
@@ -552,7 +568,11 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
               title: Text(user['username']),
               onTap: () {
                 Navigator.pop(context);
-                _showPrivateChatRequestDialog(user['username'], user['socketId']);
+                _showPrivateChatRequestDialog(
+                  user['username'],
+                  user['socketId'],
+                  user['userId'],
+                );
               },
             );
           }).toList(),
@@ -561,8 +581,8 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     );
   }
 
-  void _showPrivateChatRequestDialog(String username, String? socketId) {
-    if (socketId == null) {
+  void _showPrivateChatRequestDialog(String username, String? socketId, int? userId) {
+    if (socketId == null && userId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cannot start private chat. User is not available.')),
       );
@@ -581,8 +601,12 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
           ),
           TextButton(
             onPressed: () {
-              _chatService.sendPrivateChatRequest(socketId,
-                  requesterId: _userId, requesterUsername: _chatUsername);
+              _chatService.sendPrivateChatRequest(
+                targetSocketId: socketId,
+                targetUserId: userId,
+                requesterId: _userId,
+                requesterUsername: _chatUsername,
+              );
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Özel sohbet isteği gönderildi.')),

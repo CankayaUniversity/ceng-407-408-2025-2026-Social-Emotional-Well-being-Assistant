@@ -177,14 +177,30 @@ class ChatService {
     });
   }
 
-  void sendPrivateChatRequest(String targetSocketId, {int? requesterId, String? requesterUsername}) {
+  void sendPrivateChatRequest({
+    String? targetSocketId,
+    int? targetUserId,
+    int? requesterId,
+    String? requesterUsername,
+  }) {
     final resolvedUserId = requesterId ?? _currentUserId;
     final resolvedUsername = requesterUsername ?? _currentUsername;
-    _socket?.emit('private-chat-request', {
-      'targetSocketId': targetSocketId,
+    if (targetSocketId == null && targetUserId == null) {
+      return;
+    }
+
+    final payload = <String, dynamic>{
       'requesterId': resolvedUserId,
       'requesterUsername': resolvedUsername,
-    });
+    };
+    if (targetSocketId != null) {
+      payload['targetSocketId'] = targetSocketId;
+    }
+    if (targetUserId != null) {
+      payload['targetUserId'] = targetUserId;
+    }
+
+    _socket?.emit('private-chat-request', payload);
   }
 
   void acceptPrivateChat(int requesterId, {int? receiverId, String? receiverUsername}) {
