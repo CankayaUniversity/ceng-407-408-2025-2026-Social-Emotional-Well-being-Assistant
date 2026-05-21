@@ -27,7 +27,6 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
 
   final TextEditingController _messageController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
-  final TextEditingController _createRoomController = TextEditingController();
 
   final ChatService _chatService = ChatService();
   StreamSubscription? _connectionSubscription;
@@ -82,7 +81,6 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     _chatService.dispose();
     _messageController.dispose();
     _searchController.dispose();
-    _createRoomController.dispose();
     super.dispose();
   }
 
@@ -382,28 +380,6 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     });
   }
 
-  Future<void> _createRoom() async {
-    final roomName = _createRoomController.text.trim();
-    if (roomName.isEmpty) return;
-
-    if (_allRooms.any((room) => _normalizeRoomKey(room) == _normalizeRoomKey(roomName))) {
-      _createRoomController.clear();
-      _searchController.text = roomName;
-      _filterRooms(roomName);
-      return;
-    }
-
-    _safeSetState(() {
-      _ensureRoomExistsInList(roomName);
-      _setRoomStatus(roomName, RoomMembershipStatus.joined);
-      _filteredRooms = List<String>.from(_allRooms);
-    });
-
-    _createRoomController.clear();
-    _searchController.clear();
-    await _joinRoom(roomName, isNewRoom: true);
-  }
-
   Future<void> _refreshMessagesForRoom(String room) async {
     if (_userId == null) return;
     try {
@@ -684,43 +660,18 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: _filterRooms,
-                  style: TextStyle(color: navy, fontWeight: FontWeight.bold),
-                  decoration: InputDecoration(
-                    hintText: 'Oda ara...',
-                    filled: true,
-                    fillColor: Colors.white,
-                    prefixIcon: Icon(Icons.search, color: navy.withOpacity(0.4)),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  )
-                ),
-              ),
-              const SizedBox(width: 12),
-              GestureDetector(
-                onTap: _createRoom,
-                child: Container(
-                  height: 48,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: navy,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.add_rounded, color: gold, size: 20),
-                      const SizedBox(width: 4),
-                      const Text("Oda Oluştur", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+          child: TextField(
+            controller: _searchController,
+            onChanged: _filterRooms,
+            style: TextStyle(color: navy, fontWeight: FontWeight.bold),
+            decoration: InputDecoration(
+              hintText: 'Oda ara...',
+              filled: true,
+              fillColor: Colors.white,
+              prefixIcon: Icon(Icons.search, color: navy.withOpacity(0.4)),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            )
           ),
         ),
 
