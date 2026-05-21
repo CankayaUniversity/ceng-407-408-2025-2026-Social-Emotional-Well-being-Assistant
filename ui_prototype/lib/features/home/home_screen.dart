@@ -13,6 +13,8 @@ import 'ui/pill.dart';
 import 'ui/stats_sheet.dart';
 
 import 'data/home_store.dart';
+import 'appointments/appointment_add_sheet.dart';
+import 'appointments/appointment_models.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -40,6 +42,12 @@ class _HomeScreenState extends State<HomeScreen> {
   /// ✅ Bu gün Hive’dan gerçekten yüklendi mi?
   final Set<DateTime> _loadedDays = {};
 
+  /// Gün -> randevu listesi
+  final Map<DateTime, List<AppointmentEntry>> _appointmentMap = {};
+
+  /// ✅ Randevular yüklendi mi?
+  final Set<DateTime> _appointmentsLoadedDays = {};
+
   DateTime _key(DateTime d) => DateTime(d.year, d.month, d.day);
 
   @override
@@ -53,6 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _focusedDay = today;
 
       await _loadDay(today);
+      await _loadAppointments(today);
 
       if (!mounted) return;
       setState(() {});
@@ -92,6 +101,65 @@ class _HomeScreenState extends State<HomeScreen> {
     };
 
     await HomeStore.instance.writeDay(k, data);
+  }
+
+  Future<void> _loadAppointments(DateTime day) async {
+    final k = _key(day);
+    if (_appointmentsLoadedDays.contains(k)) return;
+
+    final list = HomeStore.instance.readAppointments(k);
+    list.sort((a, b) => a.timeHHmm.compareTo(b.timeHHmm));
+    _appointmentMap[k] = list;
+    _appointmentsLoadedDays.add(k);
+  }
+
+  List<AppointmentEntry> _appointmentsOf(DateTime day) {
+    final k = _key(day);
+    if (_appointmentMap.containsKey(k)) return _appointmentMap[k]!;
+
+    _appointmentMap[k] = [];
+    _loadAppointments(k).then((_) {
+      if (!mounted) return;
+      setState(() {});
+    });
+
+    return _appointmentMap[k]!;
+  }
+
+  Future<void> _saveAppointments(DateTime day) async {
+    final k = _key(day);
+    final list = _appointmentMap[k];
+    if (list == null) return;
+    await HomeStore.instance.writeAppointments(k, list);
+  }
+
+  Future<void> _addAppointment(DateTime day) async {
+    final entry = await AppointmentAddSheet.open(context, initialDay: day);
+    if (entry == null) return;
+
+    final targetDay = _key(entry.day);
+    await _loadAppointments(targetDay);
+
+    final list = [..._appointmentsOf(targetDay)];
+    list.add(entry);
+    list.sort((a, b) => a.timeHHmm.compareTo(b.timeHHmm));
+
+    setState(() {
+      _appointmentMap[targetDay] = list;
+    });
+
+    await _saveAppointments(targetDay);
+  }
+
+  Future<void> _deleteAppointment(DateTime day, String id) async {
+    final k = _key(day);
+    final list = [..._appointmentsOf(k)]..removeWhere((e) => e.id == id);
+
+    setState(() {
+      _appointmentMap[k] = list;
+    });
+
+    await _saveAppointments(k);
   }
 
   Map<HabitType, HabitDayState> _stateOf(DateTime day) {
@@ -195,6 +263,7 @@ class _HomeScreenState extends State<HomeScreen> {
     const mint = Color(0xFFD6E5E3);
     const lightGrey = Color(0xFFE5E5E5);
     const gold = Color(0xFFFFE6A7);
+    const appointmentBlue = Color(0xFF2D9CDB);
 
     final day = _key(_selectedDay ?? _focusedDay);
     final done = _doneCount(day);
@@ -319,6 +388,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       _focusedDay = f;
                     });
                     await _loadDay(selected);
+                    await _loadAppointments(selected);
                     if (!mounted) return;
                     setState(() {});
                   },
@@ -329,26 +399,163 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                   calendarBuilders: CalendarBuilders(
                     markerBuilder: (context, date, events) {
-                      final count = _doneCount(date);
-                      if (count == 0) return const SizedBox.shrink();
-                      return Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(
-                          count,
-                          (index) => Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 1),
-                            width: 5,
-                            height: 5,
-                            decoration: const BoxDecoration(
-                              color: navy,
-                              shape: BoxShape.circle,
-                            ),
+                      final habitCount = _doneCount(date);
+                      final appointmentCount = _appointmentsOf(date).length;
+                      final total = habitCount + appointmentCount;
+                      if (total == 0) return const SizedBox.shrink();
+
+                      const maxDots = 5;
+                      final habitDots = habitCount.clamp(0, maxDots);
+                      final appointmentDots = (maxDots - habitDots).clamp(0, appointmentCount);
+
+                      final dots = <Widget>[];
+                      for (int i = 0; i < habitDots; i++) {
+                        dots.add(Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
+                          width: 5,
+                          height: 5,
+                          decoration: const BoxDecoration(
+                            color: navy,
+                            shape: BoxShape.circle,
                           ),
+                        ));
+                      }
+                      for (int i = 0; i < appointmentDots; i++) {
+                        dots.add(Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
+                          width: 5,
+                          height: 5,
+                          decoration: const BoxDecoration(
+                            color: appointmentBlue,
+                            shape: BoxShape.circle,
+                          ),
+                        ));
+                      }
+
+                      return Align(
+                        alignment: Alignment.topCenter,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: dots,
                         ),
                       );
                     },
                   ),
                 ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          // Appointments Section
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: navy.withOpacity(0.05)),
+              boxShadow: [
+                BoxShadow(
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                  color: navy.withOpacity(0.06),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      "RANDEVULAR",
+                      style: TextStyle(fontWeight: FontWeight.w900, color: navy),
+                    ),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: () => _addAppointment(day),
+                      icon: const Icon(Icons.add_rounded, color: navy),
+                      label: const Text(
+                        "Ekle",
+                        style: TextStyle(color: navy, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (_appointmentsOf(day).isEmpty)
+                  Text(
+                    "Bugun icin randevu yok.",
+                    style: TextStyle(color: navy.withOpacity(0.6), fontWeight: FontWeight.w600),
+                  )
+                else
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemBuilder: (context, index) {
+                      final appt = _appointmentsOf(day)[index];
+                      final timeText = appt.timeOfDay?.format(context) ?? appt.timeHHmm;
+                      final subtitleParts = [
+                        appt.department,
+                        appt.hospital,
+                        appt.location,
+                      ].where((e) => e != null && e!.trim().isNotEmpty).map((e) => e!.trim()).toList();
+                      final subtitle = subtitleParts.isEmpty ? "" : subtitleParts.join(" • ");
+
+                      return Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: navy.withOpacity(0.08)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  timeText,
+                                  style: const TextStyle(fontWeight: FontWeight.w900, color: navy),
+                                ),
+                                const SizedBox(width: 8),
+                                if (appt.type != null && appt.type!.trim().isNotEmpty)
+                                  Pill(text: appt.type!.trim(), icon: Icons.event_available_rounded),
+                                const Spacer(),
+                                IconButton(
+                                  onPressed: () => _deleteAppointment(day, appt.id),
+                                  icon: const Icon(Icons.delete_outline, color: navy),
+                                  tooltip: "Randevuyu sil",
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              appt.doctorName,
+                              style: const TextStyle(fontWeight: FontWeight.w800, color: navy),
+                            ),
+                            if (subtitle.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  subtitle,
+                                  style: TextStyle(color: navy.withOpacity(0.7), fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            if (appt.note != null && appt.note!.trim().isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: Text(
+                                  appt.note!.trim(),
+                                  style: TextStyle(color: navy.withOpacity(0.55), fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemCount: _appointmentsOf(day).length,
+                  ),
               ],
             ),
           ),

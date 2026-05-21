@@ -3,6 +3,7 @@ import 'package:hive/hive.dart';
 
 import '../home_habit_defs.dart';
 import '../medicine/medicine_models.dart';
+import '../appointments/appointment_models.dart';
 
 class HomeStore {
   HomeStore._();
@@ -100,6 +101,11 @@ class HomeStore {
     return 'med:${_userId!}|${_dayKey(day)}';
   }
 
+  String _appointmentDayKey(DateTime day) {
+    _ensureUser();
+    return 'appt:${_userId!}|${_dayKey(day)}';
+  }
+
   List<MedicinePlan> readMedicinePlans(DateTime day) {
     final key = _medicineDayKey(day);
     final raw = _safeBox.get(key);
@@ -119,6 +125,40 @@ class HomeStore {
     final key = _medicineDayKey(day);
     final raw = plans.map((p) => p.toMap()).toList();
     await _safeBox.put(key, raw);
+  }
+
+  List<AppointmentEntry> readAppointments(DateTime day) {
+    final key = _appointmentDayKey(day);
+    final raw = _safeBox.get(key);
+
+    if (raw == null || raw is! List) return [];
+
+    try {
+      return raw
+          .map((m) => AppointmentEntry.fromMap(m as Map, fallbackDay: day))
+          .toList();
+    } catch (e) {
+      print("[ERROR] Failed to read appointments: $e");
+      return [];
+    }
+  }
+
+  Future<void> writeAppointments(DateTime day, List<AppointmentEntry> entries) async {
+    await _ensureBoxOpen();
+    final key = _appointmentDayKey(day);
+    final raw = entries.map((e) => e.toMap()).toList();
+    await _safeBox.put(key, raw);
+  }
+
+  Future<void> addAppointment(DateTime day, AppointmentEntry entry) async {
+    final list = readAppointments(day);
+    list.add(entry);
+    await writeAppointments(day, list);
+  }
+
+  Future<void> removeAppointment(DateTime day, String id) async {
+    final list = readAppointments(day)..removeWhere((e) => e.id == id);
+    await writeAppointments(day, list);
   }
 
   /// Gün verisini okur: HabitType -> (done, time)
@@ -174,9 +214,13 @@ class HomeStore {
   Future<void> clearAllForUser() async {
     await _ensureBoxOpen();
     _ensureUser();
-    final prefix = 'u:${_userId!}|';
+    final prefixes = [
+      'u:${_userId!}|',
+      'med:${_userId!}|',
+      'appt:${_userId!}|',
+    ];
     final keysToDelete = _safeBox.keys
-        .where((k) => k is String && k.startsWith(prefix))
+        .where((k) => k is String && prefixes.any((p) => k.startsWith(p)))
         .toList();
     await _safeBox.deleteAll(keysToDelete);
   }
