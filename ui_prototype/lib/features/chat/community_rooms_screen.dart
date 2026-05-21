@@ -10,9 +10,19 @@ import 'package:ui_prototype/core/api/token_store.dart';
 import 'package:ui_prototype/core/config/app_config.dart';
 import 'package:ui_prototype/core/services/chat_service.dart';
 import 'package:ui_prototype/core/services/notification_service.dart';
+import 'data/chat_store.dart';
 
 class CommunityRoomsScreen extends StatefulWidget {
-  const CommunityRoomsScreen({super.key});
+  final String? initialRoom;
+  final bool openAsPrivate;
+  final bool popOnBack;
+
+  const CommunityRoomsScreen({
+    super.key,
+    this.initialRoom,
+    this.openAsPrivate = false,
+    this.popOnBack = false,
+  });
 
   @override
   State<CommunityRoomsScreen> createState() => _CommunityRoomsScreenState();
@@ -51,6 +61,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   bool _joiningRoom = false;
   bool _loadingRooms = true;
   bool _leavingRoom = false;
+  bool _initialRoomHandled = false;
 
   int? _userId;
 
@@ -65,9 +76,13 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
 
   String? _initError;
 
+  bool _openingInitialRoom = false;
+  final Map<String, List<String>> _privateRoomParticipants = {};
+
   @override
   void initState() {
     super.initState();
+    _openingInitialRoom = widget.openAsPrivate && (widget.initialRoom?.trim().isNotEmpty ?? false);
     _initializeScreen();
   }
 
@@ -102,10 +117,10 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
       }
 
       // Kullanıcıya özel nickname ve anonim modu yükle
-        final anonymousMode = prefs.getBool(_anonymousModeKey) ?? true;
-        final nickname = (prefs.getString(_nicknameKey) ?? '').trim();
+      final anonymousMode = prefs.getBool(_anonymousModeKey) ?? true;
+      final nickname = (prefs.getString(_nicknameKey) ?? '').trim();
 
-        final resolvedChatName = nickname.isNotEmpty ? nickname : 'Anonim';
+      final resolvedChatName = nickname.isNotEmpty ? nickname : 'Anonim';
 
       final String userJoinedKey = '${_joinedRoomsKey}_${user.id}';
       final List<String> savedJoinedRooms = prefs.getStringList(userJoinedKey) ?? [];
@@ -129,20 +144,28 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
         }
       });
 
+      _refreshPrivateRoomMetadata();
+
       if (remoteJoinedRooms != null) {
         await prefs.setStringList(userJoinedKey, joinedRooms);
       }
 
       await _initializeChatService();
+
+      if (widget.openAsPrivate && widget.initialRoom != null) {
+        await _openInitialRoomIfNeeded();
+      }
+
       await _loadRooms();
       // Çevrimdışı mesajları kontrol et
       await _checkMessagesWhileAway();
+      await _openInitialRoomIfNeeded();
     } catch (e) {
       debugPrint('INIT ERROR: $e');
       _safeSetState(() {
         _loadingUser = false;
         _loadingRooms = false;
-        _initError = 'Community Rooms ekranı başlatılamadı.';
+        _initError = 'Topluluk Odaları ekranı başlatılamadı.';
       });
     }
   }
@@ -179,7 +202,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     if (totalNew > 0) {
       NotificationService().showNotification(
         id: 999,
-        title: 'Community Rooms',
+        title: 'Topluluk Odaları',
         body: 'Hoş geldin! Sen yokken $totalNew yeni mesaj geldi.',
       );
     }
@@ -230,6 +253,132 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
 
   String _normalizeRoomKey(String room) => room.trim().toLowerCase();
 
+  bool _isPrivateRoom(String room) => _normalizeRoomKey(room).startsWith('private-');
+
+  List<String> _participantsFrom(dynamic raw) {
+    if (raw is! List) return [];
+    return raw.map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList();
+  }
+
+  void _refreshPrivateRoomMetadata() {
+    final raw = ChatStore.instance.loadPrivateChats();
+    _privateRoomParticipants.clear();
+    for (final chat in raw) {
+      final room = (chat['room'] ?? '').toString().trim();
+      if (room.isEmpty) continue;
+      _privateRoomParticipants[_normalizeRoomKey(room)] = _participantsFrom(chat['participants']);
+    }
+  }
+
+  List<String> _participantsForRoom(String room) {
+    return _privateRoomParticipants[_normalizeRoomKey(room)] ?? [];
+  }
+
+  String _displayTitleForRoom(String room) {
+    final trimmed = room.trim();
+    if (trimmed.isEmpty) return 'Sohbet';
+    if (_isPrivateRoom(trimmed)) {
+      final current = _chatUsername ?? '';
+      final participants = _participantsForRoom(trimmed);
+      final others = participants.where((p) => p != current).toList();
+      if (others.isNotEmpty) return others.join(', ');
+      if (participants.isNotEmpty) return participants.join(', ');
+      return 'Özel Sohbet';
+    }
+    return trimmed;
+  }
+
+  Map<String, dynamic> _chatItemToMap(ChatItem item) {
+    return {
+      'type': item.type.name,
+      'username': item.username,
+      'message': item.message,
+      'room': item.room,
+      'createdAt': item.createdAt.toIso8601String(),
+      'userId': item.userId,
+      'socketId': item.socketId,
+    };
+  }
+
+  ChatItem _chatItemFromMap(Map<String, dynamic> data) {
+    final typeName = data['type']?.toString() ?? 'message';
+    final type = ChatItemType.values.firstWhere(
+      (t) => t.name == typeName,
+      orElse: () => ChatItemType.message,
+    );
+    return ChatItem(
+      type: type,
+      username: data['username']?.toString(),
+      message: data['message']?.toString(),
+      room: data['room']?.toString(),
+      createdAt: DateTime.tryParse(data['createdAt']?.toString() ?? '') ?? DateTime.now(),
+      userId: int.tryParse(data['userId']?.toString() ?? ''),
+      socketId: data['socketId']?.toString(),
+    );
+  }
+
+  Future<void> _loadPrivateMessagesForRoom(String room) async {
+    final raw = ChatStore.instance.loadPrivateMessages(room);
+    final items = raw.map(_chatItemFromMap).toList();
+    _safeSetState(() {
+      _items
+        ..clear()
+        ..addAll(items);
+    });
+  }
+
+  Future<void> _persistPrivateMessage(ChatItem item) async {
+    final room = item.room;
+    if (room == null || !_isPrivateRoom(room)) return;
+    await ChatStore.instance.appendPrivateMessage(room, _chatItemToMap(item));
+    final participants = _participantsForRoom(room);
+    if (participants.isNotEmpty) {
+      await ChatStore.instance.upsertPrivateChat(
+        room: room,
+        participants: participants,
+        lastActive: item.createdAt,
+      );
+    }
+  }
+
+  Future<void> _openInitialRoomIfNeeded() async {
+    final initialRoom = widget.initialRoom;
+    if (initialRoom == null || _initialRoomHandled || _userId == null || _chatUsername == null) {
+      return;
+    }
+    _initialRoomHandled = true;
+    await _openRoomFromHistory(initialRoom, isPrivate: widget.openAsPrivate);
+  }
+
+  Future<void> _openRoomFromHistory(String room, {required bool isPrivate}) async {
+    final trimmedRoom = room.trim();
+    if (trimmedRoom.isEmpty || _userId == null) return;
+
+    _chatService.joinRoom(trimmedRoom, _userId!, _chatUsername!);
+    _chatService.setCurrentRoom(trimmedRoom);
+
+    _safeSetState(() {
+      _currentRoom = trimmedRoom;
+      _joined = true;
+      _items.clear();
+      if (!isPrivate) {
+        _setRoomStatus(trimmedRoom, RoomMembershipStatus.joined);
+      }
+    });
+
+    if (isPrivate) {
+      await _loadPrivateMessagesForRoom(trimmedRoom);
+    } else {
+      await _refreshMessagesForRoom(trimmedRoom);
+    }
+
+    if (_openingInitialRoom) {
+      _safeSetState(() {
+        _openingInitialRoom = false;
+      });
+    }
+  }
+
   RoomMembershipStatus _getRoomStatus(String room) {
     return _roomStatuses[_normalizeRoomKey(room)] ?? RoomMembershipStatus.none;
   }
@@ -275,6 +424,10 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
       final messageText = chatItem.message ?? '';
       final senderId = chatItem.userId;
 
+      if (msgRoom != null && _isPrivateRoom(msgRoom)) {
+        _persistPrivateMessage(chatItem);
+      }
+
       if (_joined && msgRoom != null && _normalizeRoomKey(_currentRoom!) == _normalizeRoomKey(msgRoom)) {
         _safeSetState(() {
           _items.add(chatItem);
@@ -297,6 +450,11 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
 
     _privateChatStartedSubscription = _chatService.privateChatSessions.listen((session) {
       _chatService.setCurrentRoom(session.room);
+      ChatStore.instance.upsertPrivateChat(
+        room: session.room,
+        participants: session.participants,
+      );
+      _privateRoomParticipants[_normalizeRoomKey(session.room)] = session.participants;
       _safeSetState(() {
         _currentRoom = session.room;
         _joined = true;
@@ -563,7 +721,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   void _showPrivateChatRequestDialog(String username, String? socketId, int? userId) {
     if (socketId == null && userId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cannot start private chat. User is not available.')),
+        const SnackBar(content: Text('Özel sohbet başlatılamıyor. Kullanıcı uygun değil.')),
       );
       return;
     }
@@ -571,7 +729,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Private Chat'),
+        title: const Text('Özel Sohbet'),
         content: Text('$username ile özel sohbet başlatmak istiyor musunuz?'),
         actions: [
           TextButton(
@@ -606,9 +764,23 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
 
     if (_loadingUser) return const Scaffold(backgroundColor: mint, body: Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(navy))));
 
+    if (_openingInitialRoom && !_joined) {
+      return const Scaffold(
+        backgroundColor: mint,
+        body: Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(navy))),
+      );
+    }
+
     return WillPopScope(
       onWillPop: () async {
-        if (_joined) { _backToRoomBrowser(); return false; }
+        if (_joined) {
+          if (widget.popOnBack) {
+            Navigator.pop(context);
+            return false;
+          }
+          _backToRoomBrowser();
+          return false;
+        }
         return true;
       },
       child: Scaffold(
@@ -616,10 +788,23 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
         appBar: AppBar(
           backgroundColor: navy,
           foregroundColor: Colors.white,
-          leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () { if (_joined) _backToRoomBrowser(); else Navigator.pop(context); }),
-          title: Text(_joined ? (_currentRoom ?? 'Chat') : 'Community Rooms', style: const TextStyle(fontWeight: FontWeight.w900)),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (_joined) {
+                if (widget.popOnBack) {
+                  Navigator.pop(context);
+                } else {
+                  _backToRoomBrowser();
+                }
+              } else {
+                Navigator.pop(context);
+              }
+            },
+          ),
+          title: Text(_joined ? _displayTitleForRoom(_currentRoom ?? '') : 'Topluluk Odaları', style: const TextStyle(fontWeight: FontWeight.w900)),
           actions: [
-            if (_joined && !_currentRoom!.startsWith('private-'))
+            if (_joined && !_isPrivateRoom(_currentRoom ?? ''))
               IconButton(
                 icon: const Icon(Icons.people, color: gold),
                 onPressed: _showRoomUsers,
@@ -640,7 +825,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(color: navy.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: navy.withOpacity(0.3))),
-        child: Text('Joined', style: TextStyle(color: navy, fontSize: 12, fontWeight: FontWeight.w900)),
+        child: Text('Katıldı', style: TextStyle(color: navy, fontSize: 12, fontWeight: FontWeight.w900)),
       );
     }
 
@@ -648,7 +833,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.red.withOpacity(0.3))),
-        child: Text('Left', style: TextStyle(color: Colors.red.shade700, fontSize: 12, fontWeight: FontWeight.w900)),
+        child: Text('Ayrıldı', style: TextStyle(color: Colors.red.shade700, fontSize: 12, fontWeight: FontWeight.w900)),
       );
     }
 

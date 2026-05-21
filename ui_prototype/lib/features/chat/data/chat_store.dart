@@ -63,4 +63,78 @@ class ChatStore {
     final key = _aiChatKey();
     await _safeBox.put(key, messages);
   }
+
+  // --- Private Chats ---
+
+  String _privateChatKey() {
+    _ensureUser();
+    return 'private_chats:${_userId!}';
+  }
+
+  List<Map<String, dynamic>> loadPrivateChats() {
+    final key = _privateChatKey();
+    final raw = _safeBox.get(key);
+    if (raw == null || raw is! List) return [];
+    return List<Map<String, dynamic>>.from(raw.map((item) => Map<String, dynamic>.from(item)));
+  }
+
+  Future<void> savePrivateChats(List<Map<String, dynamic>> chats) async {
+    await _ensureBoxOpen();
+    final key = _privateChatKey();
+    await _safeBox.put(key, chats);
+  }
+
+  Future<void> upsertPrivateChat({
+    required String room,
+    required List<String> participants,
+    DateTime? lastActive,
+  }) async {
+    final items = loadPrivateChats();
+    final normalizedRoom = room.trim();
+    if (normalizedRoom.isEmpty) return;
+
+    final payload = <String, dynamic>{
+      'room': normalizedRoom,
+      'participants': participants,
+      'lastActive': (lastActive ?? DateTime.now()).toIso8601String(),
+    };
+
+    final index = items.indexWhere((item) => (item['room'] ?? '').toString() == normalizedRoom);
+    if (index >= 0) {
+      final merged = Map<String, dynamic>.from(items[index]);
+      merged.addAll(payload);
+      items[index] = merged;
+    } else {
+      items.add(payload);
+    }
+
+    await savePrivateChats(items);
+  }
+
+  String _privateMessagesKey(String room) {
+    _ensureUser();
+    final normalized = room.trim().toLowerCase();
+    return 'private_messages:${_userId!}:$normalized';
+  }
+
+  List<Map<String, dynamic>> loadPrivateMessages(String room) {
+    final key = _privateMessagesKey(room);
+    final raw = _safeBox.get(key);
+    if (raw == null || raw is! List) return [];
+    return List<Map<String, dynamic>>.from(raw.map((item) => Map<String, dynamic>.from(item)));
+  }
+
+  Future<void> savePrivateMessages(String room, List<Map<String, dynamic>> messages) async {
+    await _ensureBoxOpen();
+    final key = _privateMessagesKey(room);
+    await _safeBox.put(key, messages);
+  }
+
+  Future<void> appendPrivateMessage(String room, Map<String, dynamic> message) async {
+    final normalizedRoom = room.trim();
+    if (normalizedRoom.isEmpty) return;
+    final messages = loadPrivateMessages(normalizedRoom);
+    messages.add(Map<String, dynamic>.from(message));
+    await savePrivateMessages(normalizedRoom, messages);
+  }
 }

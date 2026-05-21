@@ -4,6 +4,7 @@ import 'package:ui_prototype/core/services/event_service.dart';
 import 'ai_chat_screen.dart';
 import 'community_rooms_screen.dart';
 import 'all_events_screen.dart';
+import 'private_chat_rooms_screen.dart';
 
 class ChatHubScreen extends StatefulWidget {
   const ChatHubScreen({super.key});
@@ -82,7 +83,10 @@ class _ChatHubScreenState extends State<ChatHubScreen> {
             icon: Icons.lock_rounded,
             title: 'Özel Sohbet Odaları',
             subtitle: 'Birebir güvenli mesajlaşma',
-            onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Özel İstekler (Arayüz taslağı)'))),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PrivateChatRoomsScreen()),
+            ),
             navy: navy,
             gold: gold,
           ),
