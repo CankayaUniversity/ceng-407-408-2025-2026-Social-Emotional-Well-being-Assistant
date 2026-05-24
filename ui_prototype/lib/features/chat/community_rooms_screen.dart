@@ -367,7 +367,17 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     });
 
     if (isPrivate) {
+      try {
+        await ApiClient.post('/community/join', {'userId': _userId, 'room': trimmedRoom});
+      } catch (e) {
+        debugPrint('PRIVATE JOIN ERROR: $e');
+      }
       await _loadPrivateMessagesForRoom(trimmedRoom);
+      await _refreshMessagesForRoom(
+        trimmedRoom,
+        persistPrivate: true,
+        preserveExistingOnEmpty: true,
+      );
     } else {
       await _refreshMessagesForRoom(trimmedRoom);
     }
@@ -507,11 +517,20 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
         final decoded = jsonDecode(response.body);
         List<String> rooms = [];
         if (decoded is Map && decoded['rooms'] is List) {
-          rooms = (decoded['rooms'] as List).map((e) => (e is Map ? (e['room'] ?? e['name'] ?? '') : e).toString().trim()).where((e) => e.isNotEmpty).toSet().toList();
+          rooms = (decoded['rooms'] as List)
+              .map((e) => (e is Map ? (e['room'] ?? e['name'] ?? '') : e).toString().trim())
+              .where((e) => e.isNotEmpty)
+              .where((e) => !_isPrivateRoom(e))
+              .toSet()
+              .toList();
         }
         _safeSetState(() {
           _allRooms..clear()..addAll(rooms);
-          for (final joinedRoom in _myJoinedRooms) { _ensureRoomExistsInList(joinedRoom); }
+          for (final joinedRoom in _myJoinedRooms) {
+            if (!_isPrivateRoom(joinedRoom)) {
+              _ensureRoomExistsInList(joinedRoom);
+            }
+          }
           for (final room in _allRooms) {
             final key = _normalizeRoomKey(room);
             if (_myJoinedRooms.any((r) => _normalizeRoomKey(r) == key)) {
@@ -542,27 +561,58 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     });
   }
 
-  Future<void> _refreshMessagesForRoom(String room) async {
+  Future<void> _refreshMessagesForRoom(
+    String room, {
+    bool persistPrivate = false,
+    bool preserveExistingOnEmpty = false,
+  }) async {
     if (_userId == null) return;
     try {
       final response = await ApiClient.get('/community/messages?userId=$_userId&room=$room');
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         final List<dynamic> messages = (decoded is List) ? decoded : (decoded['messages'] is List ? decoded['messages'] : []);
+        final refreshedItems = <ChatItem>[];
+
+        for (final item in messages) {
+          final chatItem = ChatItem(
+            type: ChatItemType.message,
+            username: (item['username'] ?? 'Bilinmeyen').toString(),
+            message: (item['message'] ?? '').toString(),
+            room: room, // Populate room
+            createdAt: DateTime.tryParse(item['createdAt']?.toString() ?? '') ?? DateTime.now(),
+            userId: int.tryParse(item['userId']?.toString() ?? ''),
+            socketId: item['socketId']?.toString(),
+          );
+          refreshedItems.add(chatItem);
+        }
+
+        if (preserveExistingOnEmpty && refreshedItems.isEmpty) {
+          return;
+        }
+
         _safeSetState(() {
-          _items.clear();
-          for (final item in messages) {
-            _items.add(ChatItem(
-              type: ChatItemType.message,
-              username: (item['username'] ?? 'Bilinmeyen').toString(),
-              message: (item['message'] ?? '').toString(),
-              room: room, // Populate room
-              createdAt: DateTime.tryParse(item['createdAt']?.toString() ?? '') ?? DateTime.now(),
-              userId: int.tryParse(item['userId']?.toString() ?? ''),
-              socketId: item['socketId']?.toString(),
-            ));
-          }
+          _items
+            ..clear()
+            ..addAll(refreshedItems);
         });
+
+        if (persistPrivate && _isPrivateRoom(room)) {
+          final payload = refreshedItems.map(_chatItemToMap).toList();
+          await ChatStore.instance.savePrivateMessages(room, payload);
+
+          if (refreshedItems.isNotEmpty) {
+            final latest = refreshedItems.last.createdAt;
+            final participants = _participantsForRoom(room);
+            if (participants.isNotEmpty) {
+              await ChatStore.instance.upsertPrivateChat(
+                room: room,
+                participants: participants,
+                lastActive: latest,
+              );
+            }
+          }
+        }
       }
     } catch (e) {
       debugPrint('REFRESH MESSAGES ERROR: $e');
