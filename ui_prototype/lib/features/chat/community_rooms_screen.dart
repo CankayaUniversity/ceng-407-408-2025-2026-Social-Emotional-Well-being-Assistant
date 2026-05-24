@@ -413,7 +413,11 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
       if (isConnected) {
         // Katıldığımız tüm odalara socket üzerinden bağlan
         for (final room in _myJoinedRooms) {
-          _chatService.joinRoom(room, _userId!, _chatUsername!);
+          _chatService.joinRoom(room, _userId!, _chatUsername!, setAsCurrent: false);
+        }
+
+        if (_currentRoom != null) {
+          _chatService.joinRoom(_currentRoom!, _userId!, _chatUsername!);
         }
       }
     });
@@ -659,6 +663,12 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   void _sendMessage() {
     final text = _messageController.text.trim();
     if (text.isEmpty || !_joined || _currentRoom == null) return;
+    if (!_connected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bağlantı yok. Lütfen bağlantıyı bekleyin.')),
+      );
+      return;
+    }
     _chatService.sendMessage(text, _userId!, _chatUsername!);
     _messageController.clear();
   }

@@ -23,3 +23,9 @@ macos/build/
 windows/build/
 ios/build/
 android/build/
+ui_prototype/linux/flutter/generated_plugins.cmake
+ui_prototype/windows/flutter/generated_plugins.cmake
+ui_prototype/windows/flutter/generated_plugin_registrant.h
+ui_prototype/macos/Flutter/GeneratedPluginRegistrant.swift
+ui_prototype/linux/flutter/generated_plugin_registrant.h
+ui_prototype/linux/flutter/generated_plugin_registrant.cc

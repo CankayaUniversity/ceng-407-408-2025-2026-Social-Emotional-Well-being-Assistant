@@ -153,8 +153,10 @@ class ChatService {
     _socket!.connect();
   }
 
-  void joinRoom(String room, int userId, String username) {
-    _currentRoom = room;
+  void joinRoom(String room, int userId, String username, {bool setAsCurrent = true}) {
+    if (setAsCurrent) {
+      _currentRoom = room;
+    }
     _socket?.emit('join-room', {
       'room': room,
       'userId': userId,
