@@ -121,6 +121,9 @@ io.on("connection", (socket) => {
 
   const handlePrivateChatRequest = (payload = {}) => {
     try {
+      const targetUserId = Number(
+        payload.targetUserId ?? payload.toUserId ?? payload.receiverId ?? 0
+      );
       const rawTarget =
         typeof payload === "string" || typeof payload === "number"
           ? payload
@@ -129,7 +132,7 @@ io.on("connection", (socket) => {
             payload.toSocketId ??
             payload.to ??
             "";
-      const targetSocketId = normalizeRoom(rawTarget);
+      let targetSocketId = normalizeRoom(rawTarget);
       const requesterId = Number(
         payload.requesterId ?? payload.userId ?? socket.data.userId ?? 0
       );
@@ -137,9 +140,17 @@ io.on("connection", (socket) => {
         payload.requesterUsername ?? payload.username ?? socket.data.username
       );
 
+      if (!targetSocketId && targetUserId) {
+        const targetSocket = findSocketByUserId(targetUserId);
+        if (targetSocket) {
+          targetSocketId = targetSocket.id;
+        }
+      }
+
       if (!targetSocketId || !requesterId) {
         logMessage("[PRIVATE-INVITE SKIP] Invalid payload", {
           targetSocketId,
+          targetUserId,
           requesterId,
           requesterUsername,
         });
@@ -152,6 +163,7 @@ io.on("connection", (socket) => {
       if (!targetSocket) {
         logMessage("[PRIVATE-INVITE SKIP] Target not connected", {
           targetSocketId,
+          targetUserId,
         });
         return;
       }
