@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ui_prototype/features/mood/models/mood_models.dart';
+import 'package:ui_prototype/core/services/gamification_service.dart';
 
 class MoodRepository extends ChangeNotifier {
   final Map<DateTime, MoodEntry> _byDay = <DateTime, MoodEntry>{};
@@ -22,6 +23,11 @@ class MoodRepository extends ChangeNotifier {
   void upsertEntry(MoodEntry entry) {
     _byDay[dateOnly(entry.day)] = entry.copyWith(day: dateOnly(entry.day));
     notifyListeners();
+
+    // Gamification Triggers
+    GamificationService().recordMoodEntry();
+    GamificationService().recordMoodType(entry.intensity); // intensity maps to 1-5 score
+
     unawaited(_save()); // ✅ persist
   }
 

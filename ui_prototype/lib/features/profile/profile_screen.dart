@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:ui_prototype/core/api/api_client.dart';
+import 'package:ui_prototype/core/services/gamification_service.dart';
 
 import 'data/emergency_contact_store.dart';
 import '../chat/data/chat_store.dart';
@@ -48,6 +49,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _crisisNotifications = true;
   bool _loadingPrefs = true;
 
+  List<String> _earnedBadges = [];
+
   late String _realName;
 
   final _nicknameController = TextEditingController();
@@ -60,11 +63,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     _realName = widget.loginUsername;
     _initProfile();
+    GamificationService().addListener(_loadEarnedBadges);
   }
 
   Future<void> _initProfile() async {
     await _loadProfilePrefs();
+    await _loadEarnedBadges();
     _loadContacts();
+  }
+
+  Future<void> _loadEarnedBadges() async {
+    final badges = await GamificationService().getEarnedBadges();
+    if (mounted) {
+      setState(() {
+        _earnedBadges = badges;
+      });
+    }
   }
 
   Future<void> _loadProfilePrefs() async {
@@ -137,6 +151,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   void dispose() {
+    GamificationService().removeListener(_loadEarnedBadges);
     _nicknameController.dispose();
     _ageController.dispose();
     _cityController.dispose();
@@ -393,6 +408,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
 
           const SizedBox(height: 28),
+          Text("Başarımlarım", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: navy)),
+          const SizedBox(height: 12),
+          _buildBadgeList(navy, gold),
+
+          const SizedBox(height: 28),
           Text("Kullanıcı Bilgileri", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: navy)),
           const SizedBox(height: 12),
 
@@ -530,6 +550,120 @@ class _ProfileScreenState extends State<ProfileScreen> {
           padding: const EdgeInsets.only(left: 50),
           child: Text(subtitle, style: TextStyle(fontWeight: FontWeight.w600, color: navy.withOpacity(0.4), fontSize: 12)),
         ),
+      ),
+    );
+  }
+
+  Widget _buildBadgeList(Color navy, Color gold) {
+    final List<Map<String, dynamic>> allBadges = [
+      {
+        'type': BadgeType.consistency7Days.name,
+        'title': '7 Günlük İstikrar',
+        'icon': Icons.calendar_today_rounded,
+        'desc': '7 gün üst üste mod girişi yaptın'
+      },
+      {
+        'type': BadgeType.moodExplorer.name,
+        'title': 'Duygu Kaşifi',
+        'icon': Icons.explore_rounded,
+        'desc': '5 farklı duygu türü keşfettin'
+      },
+      {
+        'type': BadgeType.deepChat.name,
+        'title': 'Derin Sohbet',
+        'icon': Icons.forum_rounded,
+        'desc': 'Ebhire ile derin bir bağ kurdun'
+      },
+      {
+        'type': BadgeType.socialButterfly.name,
+        'title': 'Sosyal Kelebek',
+        'icon': Icons.emoji_nature_rounded,
+        'desc': 'Toplulukla etkileşime geçtin'
+      },
+    ];
+
+    return Container(
+      height: 110,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: allBadges.length,
+        itemBuilder: (context, index) {
+          final badge = allBadges[index];
+          final isEarned = _earnedBadges.contains(badge['type']);
+          return GestureDetector(
+            onTap: () {
+              _showBadgeInfo(badge['title'], badge['desc'], isEarned, navy);
+            },
+            child: Container(
+              width: 90,
+              margin: const EdgeInsets.only(right: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: isEarned ? navy.withOpacity(0.1) : Colors.grey.withOpacity(0.1)),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: isEarned ? gold.withOpacity(0.3) : Colors.grey.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      badge['icon'],
+                      color: isEarned ? navy : Colors.grey.shade400,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    badge['title'],
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      color: isEarned ? navy : Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showBadgeInfo(String title, String desc, bool isEarned, Color navy) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(title, style: TextStyle(fontWeight: FontWeight.w900, color: navy)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(desc, style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            Text(
+              isEarned ? "TEBRİKLER! Bu rozeti kazandın." : "Hala keşfedilmeyi bekliyor...",
+              style: TextStyle(
+                color: isEarned ? Colors.green.shade700 : Colors.orange.shade700,
+                fontWeight: FontWeight.w900,
+                fontSize: 12
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Kapat", style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }

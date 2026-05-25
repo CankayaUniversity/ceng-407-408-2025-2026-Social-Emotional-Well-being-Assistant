@@ -6,6 +6,7 @@ import 'package:ui_prototype/core/api/api_client.dart';
 import 'package:ui_prototype/core/api/token_store.dart';
 import 'package:ui_prototype/core/services/event_service.dart';
 import 'package:ui_prototype/core/services/notification_service.dart';
+import 'package:ui_prototype/core/services/gamification_service.dart';
 import 'ai_chat_screen.dart';
 import 'community_rooms_screen.dart';
 import 'all_events_screen.dart';
@@ -262,6 +263,9 @@ class _ChatHubScreenState extends State<ChatHubScreen> {
   Widget _buildEventCard(EventModel event, Color navy, Color gold) {
     return GestureDetector(
       onTap: () async {
+        // Gamification Trigger
+        await GamificationService().recordEventClick();
+
         if (event.link != null && event.link!.isNotEmpty) {
           final uri = Uri.parse(event.link!);
           try {

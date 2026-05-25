@@ -10,6 +10,7 @@ import 'package:ui_prototype/core/api/token_store.dart';
 import 'package:ui_prototype/core/config/app_config.dart';
 import 'package:ui_prototype/core/services/chat_service.dart';
 import 'package:ui_prototype/core/services/notification_service.dart';
+import 'package:ui_prototype/core/services/gamification_service.dart';
 import 'data/chat_store.dart';
 
 class CommunityRoomsScreen extends StatefulWidget {
@@ -661,6 +662,9 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     _safeSetState(() {
       _unreadCounts.remove(_normalizeRoomKey(trimmedRoom));
     });
+
+    // Gamification Trigger
+    await GamificationService().recordRoomJoin();
 
     // ALWAYS inform the service that we are switching/joining this room
     _chatService.joinRoom(trimmedRoom, _userId!, _chatUsername!);

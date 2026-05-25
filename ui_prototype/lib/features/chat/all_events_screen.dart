@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:ui_prototype/core/services/event_service.dart';
+import 'package:ui_prototype/core/services/gamification_service.dart';
 
 class AllEventsScreen extends StatelessWidget {
   final List<EventModel> events;
@@ -39,6 +40,9 @@ class AllEventsScreen extends StatelessWidget {
   Widget _buildEventGridItem(BuildContext context, EventModel event, Color navy, Color gold) {
     return GestureDetector(
       onTap: () async {
+        // Gamification Trigger
+        await GamificationService().recordEventClick();
+
         if (event.link != null && event.link!.isNotEmpty) {
           final uri = Uri.parse(event.link!);
           try {

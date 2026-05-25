@@ -7,6 +7,7 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ui_prototype/core/services/gamification_service.dart';
 import 'data/chat_store.dart';
 import '../../core/services/notification_service.dart';
 import '../profile/data/emergency_contact_store.dart';
@@ -624,6 +625,9 @@ Rules:
   void _sendMessage() async {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
+
+    // Gamification Trigger
+    await GamificationService().recordAiChatMessage();
 
     _safeSetState(() {
       _messages.add(_Message(text, true));
