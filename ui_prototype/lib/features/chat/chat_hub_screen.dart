@@ -1,10 +1,16 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:ui_prototype/core/api/api_client.dart';
+import 'package:ui_prototype/core/api/token_store.dart';
 import 'package:ui_prototype/core/services/event_service.dart';
+import 'package:ui_prototype/core/services/notification_service.dart';
 import 'ai_chat_screen.dart';
 import 'community_rooms_screen.dart';
 import 'all_events_screen.dart';
 import 'private_chat_rooms_screen.dart';
+import 'data/chat_store.dart';
 
 class ChatHubScreen extends StatefulWidget {
   const ChatHubScreen({super.key});
@@ -18,10 +24,101 @@ class _ChatHubScreenState extends State<ChatHubScreen> {
   List<EventModel> _events = [];
   bool _loadingEvents = true;
 
+  int _communityUnreadCount = 0;
+  int _privateUnreadCount = 0;
+  static bool _sessionNotificationShown = false;
+
   @override
   void initState() {
     super.initState();
     _loadEvents();
+    _checkMessagesWhileAway();
+  }
+
+  Future<void> _checkMessagesWhileAway() async {
+    final user = await TokenStore.getCurrentUser();
+    if (user == null) return;
+
+    final userId = user.id;
+    final prefs = await SharedPreferences.getInstance();
+
+    // 1. Get joined community rooms (strictly non-private)
+    final String userJoinedKey = 'joined_community_rooms_$userId';
+    final List<String> communityRooms = (prefs.getStringList(userJoinedKey) ?? [])
+        .where((r) => !r.trim().toLowerCase().startsWith('private-'))
+        .toSet()
+        .toList();
+
+    // 2. Get private rooms from ChatStore (strictly private)
+    final privateChats = ChatStore.instance.loadPrivateChats();
+    final List<String> privateRooms = privateChats
+        .map((c) => c['room']?.toString() ?? '')
+        .where((r) => r.isNotEmpty && r.trim().toLowerCase().startsWith('private-'))
+        .toSet()
+        .toList();
+
+    int totalNew = 0;
+    int communityNew = 0;
+    int privateNew = 0;
+
+    // Helper to normalize room key (same as in community_rooms_screen)
+    String normalize(String r) => r.trim().toLowerCase();
+
+    // Check Community Rooms
+    for (final room in communityRooms) {
+      final unread = await _getUnreadCountForRoom(userId, room, prefs, normalize);
+      communityNew += unread;
+    }
+
+    // Check Private Rooms
+    for (final room in privateRooms) {
+      final unread = await _getUnreadCountForRoom(userId, room, prefs, normalize);
+      privateNew += unread;
+    }
+
+    totalNew = communityNew + privateNew;
+
+    if (mounted) {
+      setState(() {
+        _communityUnreadCount = communityNew;
+        _privateUnreadCount = privateNew;
+      });
+    }
+
+    if (totalNew > 0 && !_sessionNotificationShown) {
+      _sessionNotificationShown = true;
+      NotificationService().showNotification(
+        id: 999,
+        title: 'Keşfet',
+        body: 'Hoş geldin! Sen yokken $totalNew yeni mesaj geldi.',
+      );
+    }
+  }
+
+  Future<int> _getUnreadCountForRoom(int userId, String room, SharedPreferences prefs, String Function(String) normalize) async {
+    final key = normalize(room);
+    final lastSeenStr = prefs.getString('last_seen_${userId}_$key');
+    final lastSeen = lastSeenStr != null
+        ? DateTime.tryParse(lastSeenStr) ?? DateTime.fromMillisecondsSinceEpoch(0)
+        : DateTime.fromMillisecondsSinceEpoch(0);
+
+    try {
+      final response = await ApiClient.get('/community/messages?userId=$userId&room=$room');
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final List<dynamic> messages = (decoded is List) ? decoded : (decoded['messages'] is List ? decoded['messages'] : []);
+        int count = 0;
+        for (final m in messages) {
+          final createdAt = DateTime.tryParse(m['createdAt']?.toString() ?? '');
+          final senderId = int.tryParse(m['userId']?.toString() ?? '');
+          if (senderId != userId && createdAt != null && createdAt.isAfter(lastSeen)) {
+            count++;
+          }
+        }
+        return count;
+      }
+    } catch (_) {}
+    return 0;
   }
 
   Future<void> _loadEvents() async {
@@ -73,7 +170,11 @@ class _ChatHubScreenState extends State<ChatHubScreen> {
             icon: Icons.groups_rounded,
             title: 'Topluluk Odaları',
             subtitle: 'Destek gruplarına katıl',
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CommunityRoomsScreen())),
+            unreadCount: _communityUnreadCount,
+            onTap: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => const CommunityRoomsScreen()));
+              _checkMessagesWhileAway(); // Refresh counts when returning
+            },
             navy: navy,
             gold: gold,
           ),
@@ -83,10 +184,14 @@ class _ChatHubScreenState extends State<ChatHubScreen> {
             icon: Icons.lock_rounded,
             title: 'Özel Sohbet Odaları',
             subtitle: 'Birebir güvenli mesajlaşma',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const PrivateChatRoomsScreen()),
-            ),
+            unreadCount: _privateUnreadCount,
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PrivateChatRoomsScreen()),
+              );
+              _checkMessagesWhileAway(); // Refresh counts when returning
+            },
             navy: navy,
             gold: gold,
           ),
@@ -292,6 +397,7 @@ class _ChatHubScreenState extends State<ChatHubScreen> {
     required VoidCallback onTap,
     required Color navy,
     required Color gold,
+    int unreadCount = 0,
   }) {
     return InkWell(
       onTap: onTap,
@@ -326,13 +432,35 @@ class _ChatHubScreenState extends State<ChatHubScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      color: navy,
-                      fontSize: 17,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          color: navy,
+                          fontSize: 17,
+                        ),
+                      ),
+                      if (unreadCount > 0) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            '$unreadCount',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Text(

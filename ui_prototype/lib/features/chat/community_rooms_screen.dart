@@ -48,6 +48,9 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
   final List<String> _allRooms = [];
   List<String> _filteredRooms = [];
 
+  // Track unread message counts per room
+  final Map<String, int> _unreadCounts = {};
+
   // Oda bazlı kullanıcı durumu
   final Map<String, RoomMembershipStatus> _roomStatuses = {};
   // Kullanıcının katıldığı odaların listesi (Hafıza için)
@@ -157,8 +160,7 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
       }
 
       await _loadRooms();
-      // Çevrimdışı mesajları kontrol et
-      await _checkMessagesWhileAway();
+      await _updateUnreadCounts();
       await _openInitialRoomIfNeeded();
     } catch (e) {
       debugPrint('INIT ERROR: $e');
@@ -170,13 +172,28 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     }
   }
 
-  // Çevrimdışı mesaj bildirimi (Catch-up)
-  Future<void> _checkMessagesWhileAway() async {
+  // Calculate and update unread counts
+  Future<void> _updateUnreadCounts() async {
     if (_userId == null) return;
     final prefs = await SharedPreferences.getInstance();
-    int totalNew = 0;
 
-    for (final room in _myJoinedRooms) {
+    // Check both joined community rooms and any active private rooms
+    final List<String> roomsToCheck = _myJoinedRooms.toList();
+
+    // Also include rooms from ChatStore if they are private
+    final privateChats = ChatStore.instance.loadPrivateChats();
+    for (var chat in privateChats) {
+      final roomName = chat['room']?.toString();
+      if (roomName != null && roomName.isNotEmpty) {
+        if (!roomsToCheck.contains(roomName)) {
+          roomsToCheck.add(roomName);
+        }
+      }
+    }
+
+    final Map<String, int> newCounts = {};
+
+    for (final room in roomsToCheck) {
       final key = _normalizeRoomKey(room);
       final lastSeenStr = prefs.getString('last_seen_${_userId}_$key');
       final lastSeen = lastSeenStr != null
@@ -188,24 +205,25 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
         if (response.statusCode == 200) {
           final decoded = jsonDecode(response.body);
           final List<dynamic> messages = (decoded is List) ? decoded : (decoded['messages'] is List ? decoded['messages'] : []);
+          int unread = 0;
           for (final m in messages) {
             final createdAt = DateTime.tryParse(m['createdAt']?.toString() ?? '');
             final senderId = int.tryParse(m['userId']?.toString() ?? '');
             if (senderId != _userId && createdAt != null && createdAt.isAfter(lastSeen)) {
-              totalNew++;
+              unread++;
             }
+          }
+          if (unread > 0) {
+            newCounts[key] = unread;
           }
         }
       } catch (_) {}
     }
 
-    if (totalNew > 0) {
-      NotificationService().showNotification(
-        id: 999,
-        title: 'Topluluk Odaları',
-        body: 'Hoş geldin! Sen yokken $totalNew yeni mesaj geldi.',
-      );
-    }
+    _safeSetState(() {
+      _unreadCounts.clear();
+      _unreadCounts.addAll(newCounts);
+    });
   }
 
   // Okundu bilgisi güncelleme
@@ -397,7 +415,9 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     final key = _normalizeRoomKey(room);
     _roomStatuses[key] = status;
     if (status == RoomMembershipStatus.joined) {
-      _myJoinedRooms.add(room);
+      if (!_isPrivateRoom(room)) {
+        _myJoinedRooms.add(room);
+      }
     } else {
       _myJoinedRooms.removeWhere((r) => _normalizeRoomKey(r) == key);
     }
@@ -448,12 +468,25 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
         });
         _updateLastSeen(msgRoom);
       } else {
-        if (senderId != _userId && _getRoomStatus(msgRoom ?? '') == RoomMembershipStatus.joined) {
-          NotificationService().showNotification(
-            id: Random().nextInt(100000),
-            title: msgRoom ?? 'Yeni Mesaj',
-            body: '$sender: $messageText',
-          );
+        // If not in the room, increment unread count for UI
+        if (msgRoom != null && senderId != _userId) {
+          final key = _normalizeRoomKey(msgRoom);
+          _safeSetState(() {
+            _unreadCounts[key] = (_unreadCounts[key] ?? 0) + 1;
+          });
+
+          final isPrivate = _isPrivateRoom(msgRoom);
+          final isJoined = _getRoomStatus(msgRoom) == RoomMembershipStatus.joined;
+
+          if (isPrivate || isJoined) {
+            // Use room hashcode to ensure Room A and Room B have different IDs
+            // and show up as separate notifications.
+            NotificationService().showNotification(
+              id: msgRoom.hashCode,
+              title: isPrivate ? _displayTitleForRoom(msgRoom) : msgRoom,
+              body: '$sender: $messageText',
+            );
+          }
         }
       }
     });
@@ -623,6 +656,11 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     if (_joiningRoom || _leavingRoom) return;
     final trimmedRoom = room.trim();
     if (trimmedRoom.isEmpty || _userId == null) return;
+
+    // Clear unread count for this room
+    _safeSetState(() {
+      _unreadCounts.remove(_normalizeRoomKey(trimmedRoom));
+    });
 
     // ALWAYS inform the service that we are switching/joining this room
     _chatService.joinRoom(trimmedRoom, _userId!, _chatUsername!);
@@ -834,6 +872,9 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
     return WillPopScope(
       onWillPop: () async {
         if (_joined) {
+          if (_currentRoom != null) {
+            _updateLastSeen(_currentRoom!);
+          }
           if (widget.popOnBack) {
             Navigator.pop(context);
             return false;
@@ -852,6 +893,9 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
             icon: const Icon(Icons.arrow_back),
             onPressed: () {
               if (_joined) {
+                if (_currentRoom != null) {
+                  _updateLastSeen(_currentRoom!);
+                }
                 if (widget.popOnBack) {
                   Navigator.pop(context);
                 } else {
@@ -946,7 +990,20 @@ class _CommunityRoomsScreenState extends State<CommunityRoomsScreen> {
                     decoration: BoxDecoration(color: navy.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
                     child: Icon(Icons.groups_rounded, color: navy),
                   ),
-                  title: Text(room, style: TextStyle(fontWeight: FontWeight.w900, color: navy, fontSize: 16)),
+                  title: Row(
+                    children: [
+                      Expanded(child: Text(room, style: TextStyle(fontWeight: FontWeight.w900, color: navy, fontSize: 16))),
+                      if (_unreadCounts[_normalizeRoomKey(room)] != null && _unreadCounts[_normalizeRoomKey(room)]! > 0)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                          child: Text(
+                            '${_unreadCounts[_normalizeRoomKey(room)]}',
+                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                    ],
+                  ),
                   subtitle: Row(
                     children: [
                       Text("Aktif Grup", style: TextStyle(fontWeight: FontWeight.w700, color: navy.withOpacity(0.4), fontSize: 12)),

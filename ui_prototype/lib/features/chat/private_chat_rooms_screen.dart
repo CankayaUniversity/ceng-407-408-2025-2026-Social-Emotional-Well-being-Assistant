@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ui_prototype/core/api/api_client.dart';
+import 'package:ui_prototype/core/api/token_store.dart';
 import 'community_rooms_screen.dart';
 import 'data/chat_store.dart';
 
@@ -13,12 +16,22 @@ class PrivateChatRoomsScreen extends StatefulWidget {
 class _PrivateChatRoomsScreenState extends State<PrivateChatRoomsScreen> {
   bool _loading = true;
   String? _chatUsername;
+  int? _userId;
   List<Map<String, dynamic>> _chats = [];
+  final Map<String, int> _unreadCounts = {};
 
   @override
   void initState() {
     super.initState();
-    _loadChats();
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
+    final user = await TokenStore.getCurrentUser();
+    if (user != null) {
+      _userId = user.id;
+    }
+    await _loadChats();
   }
 
   Future<void> _loadChats() async {
@@ -34,6 +47,50 @@ class _PrivateChatRoomsScreenState extends State<PrivateChatRoomsScreen> {
       _chatUsername = resolvedName;
       _chats = raw;
       _loading = false;
+    });
+
+    await _calculateUnreadCounts();
+  }
+
+  Future<void> _calculateUnreadCounts() async {
+    if (_userId == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final Map<String, int> newCounts = {};
+
+    for (var chat in _chats) {
+      final room = chat['room']?.toString();
+      if (room == null || room.isEmpty) continue;
+
+      final key = room.trim().toLowerCase();
+      final lastSeenStr = prefs.getString('last_seen_${_userId}_$key');
+      final lastSeen = lastSeenStr != null
+          ? DateTime.tryParse(lastSeenStr) ?? DateTime.fromMillisecondsSinceEpoch(0)
+          : DateTime.fromMillisecondsSinceEpoch(0);
+
+      try {
+        final response = await ApiClient.get('/community/messages?userId=$_userId&room=$room');
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(response.body);
+          final List<dynamic> messages = (decoded is List) ? decoded : (decoded['messages'] is List ? decoded['messages'] : []);
+          int unread = 0;
+          for (final m in messages) {
+            final createdAt = DateTime.tryParse(m['createdAt']?.toString() ?? '');
+            final senderId = int.tryParse(m['userId']?.toString() ?? '');
+            if (senderId != _userId && createdAt != null && createdAt.isAfter(lastSeen)) {
+              unread++;
+            }
+          }
+          if (unread > 0) {
+            newCounts[room] = unread;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _unreadCounts.clear();
+      _unreadCounts.addAll(newCounts);
     });
   }
 
@@ -115,9 +172,24 @@ class _PrivateChatRoomsScreenState extends State<PrivateChatRoomsScreen> {
                           ),
                           child: Icon(Icons.lock_rounded, color: navy),
                         ),
-                        title: Text(
-                          _titleForChat(chat),
-                          style: TextStyle(fontWeight: FontWeight.w900, color: navy, fontSize: 16),
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _titleForChat(chat),
+                                style: TextStyle(fontWeight: FontWeight.w900, color: navy, fontSize: 16),
+                              ),
+                            ),
+                            if (_unreadCounts[room] != null && _unreadCounts[room]! > 0)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                child: Text(
+                                  '${_unreadCounts[room]}',
+                                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                          ],
                         ),
                         subtitle: Text(
                           _subtitleForChat(chat),
@@ -138,7 +210,7 @@ class _PrivateChatRoomsScreenState extends State<PrivateChatRoomsScreen> {
                                   ),
                                 );
                                 if (mounted) {
-                                  await _loadChats();
+                                  await _loadChats(); // This will also call _calculateUnreadCounts
                                 }
                               },
                       ),
