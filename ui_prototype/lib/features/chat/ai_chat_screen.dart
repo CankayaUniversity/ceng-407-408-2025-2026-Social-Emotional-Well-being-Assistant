@@ -795,7 +795,7 @@ Rules:
         backgroundColor: navy,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text("AI Chat", style: TextStyle(fontWeight: FontWeight.w900)),
+        title: const Text("Ebhire AI Chatbot", style: TextStyle(fontWeight: FontWeight.w900)),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings, color: Colors.white),
@@ -931,22 +931,6 @@ Rules:
                                 ),
                               ),
                             ),
-                            if (!isMe && msg.emotion != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8, left: 4),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: gold.withOpacity(0.3),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: gold, width: 0.5),
-                                  ),
-                                  child: Text(
-                                    '${msg.emotion} (${msg.riskLevel?.toString().split('.').last})',
-                                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: navy),
-                                  ),
-                                ),
-                              ),
                           ],
                         ),
                       ),

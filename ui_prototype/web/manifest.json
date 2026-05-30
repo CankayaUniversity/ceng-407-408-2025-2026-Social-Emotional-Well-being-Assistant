@@ -1,6 +1,6 @@
 {
-    "name": "ui_prototype",
-    "short_name": "ui_prototype",
+    "name": "SEWA",
+    "short_name": "SEWA",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
